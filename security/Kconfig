@@ -9,6 +9,16 @@ config SECTION_COALESCE
 	depends on ARM
 	default n
 
+config SWTPM
+	tristate "Software TPM 2.0 support by kernel module"
+	depends on m
+	default n
+	help
+	  This kernel module based on Microsoft's TPM 2.0 v1.37 (from TCG TPMWG, uploaded at 2016-11-03)
+	  (http://members.trustedcomputinggroup.org/apps/org/workgroup/tpmwg/download.php/29620)
+
+	  It works with IBM's TPM 2.0 TSS r755 (released at 2016-09-25)
+
 source security/keys/Kconfig
 
 config SECURITY_DMESG_RESTRICT
