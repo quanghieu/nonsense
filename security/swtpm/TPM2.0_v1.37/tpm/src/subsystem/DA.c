@@ -138,6 +138,9 @@ DASelfHeal(
         else
         {
             UINT64          decreaseCount;
+#ifdef _ARM_
+            UINT64          tmp;
+#endif
 
             // In the unlikely event that failedTries should become larger than
             // maxTries
@@ -145,7 +148,13 @@ DASelfHeal(
                 gp.failedTries = gp.maxTries;
 
             // How much can failedTries be decreased
+#ifdef _ARM_
+            tmp = (g_time - s_selfHealTimer);
+            do_div(tmp, 1000);
+            do_div(tmp, gp.recoveryTime);
+#else
             decreaseCount = ((g_time - s_selfHealTimer) / 1000) / gp.recoveryTime;
+#endif
 
             if(gp.failedTries <= (UINT32)decreaseCount)
                 // should not set failedTries below zero
@@ -172,7 +181,14 @@ DASelfHeal(
         // apply in this case.
         if(gp.lockoutRecovery != 0)
         {
+#ifdef _ARM_
+            UINT64 tmp;
+            tmp = g_time - s_lockoutTimer;
+            do_div(tmp, 1000);
+            if (tmp >= gp.lockoutRecovery)
+#else
             if(((g_time - s_lockoutTimer) / 1000) >= gp.lockoutRecovery)
+#endif
             {
                 gp.lockOutAuthEnabled = TRUE;
                 // Record the changes to NV

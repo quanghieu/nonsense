@@ -84,6 +84,9 @@ _plat__TimerRead(
 #define THOUSAND    1000  
     clock_t         timeDiff;
     uint64_t        adjusted;
+#ifdef _ARM_
+    uint64_t        tmp;
+#endif
 
 #   define  TOP     (THOUSAND * CLOCK_NOMINAL)
 #   define  BOTTOM  ((uint64_t)s_adjustRate * CLOCKS_PER_SEC)
@@ -107,14 +110,26 @@ _plat__TimerRead(
     timeDiff = s_realTimePrevious - timeDiff;
 
     // Do the time rate adjustment and conversion from CLOCKS_PER_SEC to mSec
+#ifdef _ARM_
+    tmp = ((uint64_t)timeDiff * TOP);
+    do_div(tmp, BOTTOM);
+    adjusted = tmp;
+#else
     adjusted = (((uint64_t)timeDiff * TOP) / BOTTOM);
+#endif
 
     s_tpmTime += (clock_t)adjusted;
 
     // Might have some rounding error that would loose CLOCKS. See what is not
     // being used. As mentioned above, this could result in putting back more than
     // is taken out
+#ifdef _ARM_
+    tmp = (adjusted * BOTTOM);
+    do_div(tmp, TOP);
+    adjusted = tmp;
+#else
     adjusted = (adjusted * BOTTOM) / TOP;
+#endif
 
     // If adjusted is not the same as timeDiff, then there is some rounding
     // error that needs to be pushed back into the previous sample.

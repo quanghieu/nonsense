@@ -160,7 +160,14 @@ ComputeAuthTimeout(
             // in seconds. To make sure that we don't time out too early, take the
             // current value of milliseconds in g_time and add that to the input
             // seconds value.
+#ifdef _ARM_
+        {
+            UINT64 tmp = g_time;
+            policyTime = (((UINT64)expiration) * 1000) + do_div(tmp, 1000);
+        }
+#else
             policyTime = (((UINT64)expiration) * 1000) + g_time % 1000;
+#endif
         else
             // The policy timeout is the absolute value of the expiration in seconds
             // added to the start time of the policy.
