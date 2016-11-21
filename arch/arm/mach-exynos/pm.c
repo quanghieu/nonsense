@@ -152,7 +152,9 @@ static int exynos_aftr_finisher(unsigned long flags)
 		if (read_cpuid_part() == ARM_CPU_PART_CORTEX_A9)
 			exynos_cpu_save_register();
 		exynos_cpu_set_boot_vector(S5P_CHECK_AFTR);
+#ifdef CONFIG_SMP
 		cpu_do_idle();
+#endif
 	}
 
 	return 1;
