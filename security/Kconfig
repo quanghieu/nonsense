@@ -4,6 +4,11 @@
 
 menu "Security options"
 
+config SECTION_COALESCE
+	bool "Coalesce page table page into same section"
+	depends on ARM
+	default n
+
 source security/keys/Kconfig
 
 config SECURITY_DMESG_RESTRICT

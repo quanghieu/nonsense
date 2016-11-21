@@ -49,7 +49,18 @@
 #endif
 
 	.globl	swapper_pg_dir
+#ifdef CONFIG_SECTION_COALESCE
+	.equ	swapper_pg_dir, KERNEL_RAM_VADDR - PG_DIR_SIZE -0x003F0000
+#else
 	.equ	swapper_pg_dir, KERNEL_RAM_VADDR - PG_DIR_SIZE
+#endif
+
+#ifdef CONFIG_SECTION_COALESCE
+	.globl  sc_status
+	.equ	sc_status, swapper_pg_dir + PG_DIR_SIZE
+	.globl	sc_sections
+	.equ	sc_sections, sc_status + 0x8000
+#endif
 
 	.macro	pgtbl, rd, phys
 	add	\rd, \phys, #TEXT_OFFSET
@@ -178,7 +189,12 @@ ENDPROC(stext)
  *  r4 = physical page table address
  */
 __create_page_tables:
+#ifdef CONFIG_SECTION_COALESCE
+	subs	r0, r8, #0x003F0000
+	pgtbl	r4, r0				@ page table address
+#else
 	pgtbl	r4, r8				@ page table address
+#endif
 
 	/*
 	 * Clear the swapper page table

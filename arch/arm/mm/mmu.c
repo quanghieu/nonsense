@@ -17,6 +17,7 @@
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
 #include <linux/sizes.h>
+#include <linux/section_coalesce.h>
 
 #include <asm/cp15.h>
 #include <asm/cputype.h>
@@ -685,7 +686,9 @@ static void __init *early_alloc(unsigned long sz)
 static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr, unsigned long prot)
 {
 	if (pmd_none(*pmd)) {
-		pte_t *pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
+        pte_t *pte = sc_early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
+        if (pte == NULL)
+		    pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
 		__pmd_populate(pmd, __pa(pte), prot);
 	}
 	BUG_ON(pmd_bad(*pmd));
@@ -1202,6 +1205,16 @@ void __init arm_mm_memblock_reserve(void)
 	 */
 	memblock_reserve(__pa(swapper_pg_dir), SWAPPER_PG_DIR_SIZE);
 
+#ifdef CONFIG_SECTION_COALESCE
+    /*
+     * Reserve the sections for page tables.
+     * Range of 0x00000000 ~ 0x00008000 is used by page tables. 
+     * Range of 0x00008000 ~ 0x00010000 is used by sc_status.
+     * Range of 0x00010000 ~ 0x003F0000 is used by sc_sections.
+     */
+    memblock_reserve(__pa(sc_status), 0x003F0000 - 0x8000);
+#endif
+
 #ifdef CONFIG_SA1111
 	/*
 	 * Because of the SA1111 DMA bug, we want to preserve our
@@ -1493,6 +1506,7 @@ void __init paging_init(const struct machine_desc *mdesc)
 
 	build_mem_type_table();
 	prepare_page_table();
+    sc_init();
 	map_lowmem();
 	dma_contiguous_remap();
 	devicemaps_init(mdesc);

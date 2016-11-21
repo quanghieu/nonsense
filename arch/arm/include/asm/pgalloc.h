@@ -11,6 +11,7 @@
 #define _ASMARM_PGALLOC_H
 
 #include <linux/pagemap.h>
+#include <linux/section_coalesce.h>
 
 #include <asm/domain.h>
 #include <asm/pgtable-hwdef.h>
@@ -85,7 +86,9 @@ pte_alloc_one_kernel(struct mm_struct *mm, unsigned long addr)
 {
 	pte_t *pte;
 
-	pte = (pte_t *)__get_free_page(PGALLOC_GFP);
+	pte = (pte_t *)sc_get_free_page();  // pte page from coalesced section
+    if (pte == NULL)
+        pte = (pte_t *)__get_free_page(PGALLOC_GFP);
 	if (pte)
 		clean_pte_table(pte);
 
@@ -118,6 +121,7 @@ pte_alloc_one(struct mm_struct *mm, unsigned long addr)
  */
 static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 {
+    pte = (pte_t *)sc_free_page((unsigned long)pte);
 	if (pte)
 		free_page((unsigned long)pte);
 }
