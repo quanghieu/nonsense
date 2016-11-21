@@ -65,7 +65,9 @@ extern unsigned char s_locality;
 // Choose if the NV memory should be backed by RAM or by file.
 // If this macro is defined, then a file is used as NV.  If it is not defined,
 // then RAM is used to back NV memory. Comment out to use RAM.
+#ifndef NO_FILE_BACKED_NV
 #define FILE_BACKED_NV
+#endif
 #if defined FILE_BACKED_NV
 #include <stdio.h>
 // A file to emulate NV storage
