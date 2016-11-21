@@ -12,6 +12,7 @@
 
 #include "Tpm.h"
 #include "ExecCommand_fp.h"
+#include "CommandDispatcher_fp.h"
 
 // Uncomment this next #include if doing static command/response buffer sizing
 // #include "CommandResponseSizes_fp.h"

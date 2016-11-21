@@ -88,7 +88,7 @@ __pragma(warning(pop))
 #  endif
 #   define LIB_EXPORT
 #   define LIB_IMPORT
-#   define _REDUCE_WARNING_LEVEL_
+#   define _REDUCE_WARNING_LEVEL_(x)
 #   define _NORMAL_WARNING_LEVEL_
 #   define  NOT_REFERENCED(x) (x = x)
 #endif
