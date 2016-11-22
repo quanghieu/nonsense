@@ -12,6 +12,7 @@
 
 #include <linux/pagemap.h>
 #include <linux/section_coalesce.h>
+#include <linux/data_protection.h>
 
 #include <asm/domain.h>
 #include <asm/pgtable-hwdef.h>
@@ -89,6 +90,8 @@ pte_alloc_one_kernel(struct mm_struct *mm, unsigned long addr)
 	pte = (pte_t *)sc_get_free_page();  // pte page from coalesced section
     if (pte == NULL)
         pte = (pte_t *)__get_free_page(PGALLOC_GFP);
+    if (likely(kdp_enabled))
+        kdp_protect_one_page((void *)pte);
 	if (pte)
 		clean_pte_table(pte);
 
@@ -122,6 +125,8 @@ pte_alloc_one(struct mm_struct *mm, unsigned long addr)
 static inline void pte_free_kernel(struct mm_struct *mm, pte_t *pte)
 {
     pte = (pte_t *)sc_free_page((unsigned long)pte);
+    if (likely(kdp_enabled))
+        kdp_unprotect_one_page((void *)pte);
 	if (pte)
 		free_page((unsigned long)pte);
 }
@@ -136,10 +141,16 @@ static inline void __pmd_populate(pmd_t *pmdp, phys_addr_t pte,
 				  pmdval_t prot)
 {
 	pmdval_t pmdval = (pte + PTE_HWTABLE_OFF) | prot;
-	pmdp[0] = __pmd(pmdval);
+    if (likely(kdp_enabled)) {
+        entry_gate();
+        shadow_pmd_populate(pmdp, pmdval);
+        exit_gate();
+    } else {
+        pmdp[0] = __pmd(pmdval);
 #ifndef CONFIG_ARM_LPAE
-	pmdp[1] = __pmd(pmdval + 256 * sizeof(pte_t));
+        pmdp[1] = __pmd(pmdval + 256 * sizeof(pte_t));
 #endif
+    }
 	flush_pmd_entry(pmdp);
 }
 

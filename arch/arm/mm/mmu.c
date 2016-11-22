@@ -1253,6 +1253,9 @@ void __init arm_mm_memblock_reserve(void)
      * Range of 0x00010000 ~ 0x003F0000 is used by sc_sections.
      */
     memblock_reserve(__pa(sc_status), 0x003F0000 - 0x8000);
+#ifdef CONFIG_DATA_PROTECTION
+    memblock_reserve(__pa(shadow_pg_dir), SWAPPER_PG_DIR_SIZE);
+#endif
 #endif
 
 #ifdef CONFIG_SA1111

@@ -81,6 +81,7 @@
 #include <linux/integrity.h>
 #include <linux/proc_ns.h>
 #include <linux/io.h>
+#include <linux/data_protection.h>
 
 #include <asm/io.h>
 #include <asm/bugs.h>
@@ -937,6 +938,7 @@ static int __ref kernel_init(void *unused)
 	kernel_init_freeable();
 	/* need to finish all async __init code before freeing the memory */
 	async_synchronize_full();
+    kdp_enable();
 	free_initmem();
 	mark_rodata_ro();
 	system_state = SYSTEM_RUNNING;

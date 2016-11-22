@@ -131,7 +131,24 @@ extern void cpu_resume(void);
 		pg &= ~(PTRS_PER_PGD*sizeof(pgd_t)-1);	\
 		(pgd_t *)phys_to_virt(pg);		\
 	})
-#else
+
+#else   /*!CONFIG_ARM_LPAE */
+
+#define cpu_get_ttbr(nr)                    \
+    ({                          \
+        unsigned long ttbr;         \
+        __asm__("mrc    p15, 0, %0, c2, c0, " #nr ""    \
+            : "=r" (ttbr) : : "cc");            \
+        ttbr;                       \
+     })
+
+#define cpu_set_ttbr(nr, val)               \
+    do {                                \
+        unsigned long ttbr = val;                   \
+        __asm__("mcr    p15, 0, %0, c2, c0, " #nr ""    \
+            : : "r" (ttbr));        \
+    } while (0)
+
 #define cpu_get_pgd()	\
 	({						\
 		unsigned long pg;			\
@@ -140,6 +157,7 @@ extern void cpu_resume(void);
 		pg &= ~0x3fff;				\
 		(pgd_t *)phys_to_virt(pg);		\
 	})
+
 #endif
 
 #else	/*!CONFIG_MMU */

@@ -102,6 +102,17 @@ extern pgprot_t		pgprot_s2_device;
 #define PAGE_S2			_MOD_PROT(pgprot_s2, L_PTE_S2_RDONLY)
 #define PAGE_S2_DEVICE		_MOD_PROT(pgprot_s2_device, L_PTE_S2_RDONLY)
 
+#ifdef CONFIG_DATA_PROTECTION
+#define PMD_SECT_XN         (_AT(pmdval_t, 1) << 4)
+#define PMD_SECT_USER       (_AT(pmdval_t, 1) << 11)    /* AP[1] */
+#define PMD_SECT_AP2        (_AT(pmdval_t, 1) << 15)    /* AP[2] read only */
+#define PMD_SECT_RDONLY     (_AT(pmdval_t, 1) << 15)    /* AP[2] read only */
+
+#define SECT_KERNEL_READONLY    _MOD_PROT(pgprot_kernel, PMD_SECT_XN | PMD_SECT_RDONLY)
+#define PAGE_KERNEL_READONLY    _MOD_PROT(pgprot_kernel, L_PTE_XN | L_PTE_RDONLY)
+#define PAGE_KERNEL_NONE        _MOD_PROT(pgprot_kernel, L_PTE_XN | L_PTE_RDONLY | L_PTE_NONE)
+#endif
+
 #define __PAGE_NONE		__pgprot(_L_PTE_DEFAULT | L_PTE_RDONLY | L_PTE_XN | L_PTE_NONE)
 #define __PAGE_SHARED		__pgprot(_L_PTE_DEFAULT | L_PTE_USER | L_PTE_XN)
 #define __PAGE_SHARED_EXEC	__pgprot(_L_PTE_DEFAULT | L_PTE_USER)
@@ -172,6 +183,10 @@ extern struct page *empty_zero_page;
 
 
 extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
+#ifdef CONFIG_DATA_PROTECTION
+extern pgd_t shadow_pg_dir[PTRS_PER_PGD];
+#endif
+
 
 /* to find an entry in a page-table-directory */
 #define pgd_index(addr)		((addr) >> PGDIR_SHIFT)
@@ -180,6 +195,9 @@ extern pgd_t swapper_pg_dir[PTRS_PER_PGD];
 
 /* to find an entry in a kernel page-table-directory */
 #define pgd_offset_k(addr)	pgd_offset(&init_mm, addr)
+/* to find an entry in a kernel page-table-directory */
+#define pgd_offset_s2(mm, addr)     ((long unsigned int)((mm)->pgd) | (((addr) >> 20) << 2))
+#define pgd_offset_s(addr)  pgd_offset_s2(&init_mm, addr)
 
 #define pmd_none(pmd)		(!pmd_val(pmd))
 #define pmd_present(pmd)	(pmd_val(pmd))
@@ -311,6 +329,15 @@ static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 	pte_val(pte) = (pte_val(pte) & ~mask) | (pgprot_val(newprot) & mask);
 	return pte;
 }
+
+#ifdef CONFIG_DATA_PROTECTION
+static inline pmd_t pmd_modify(pmd_t pmd, pgprot_t newprot)
+{
+    const pmdval_t mask = PMD_SECT_USER | PMD_SECT_XN | PMD_SECT_AP2;
+    pmd_val(pmd) = (pmd_val(pmd) & ~mask) | (pgprot_val(newprot) & mask);
+    return pmd;
+}
+#endif
 
 /*
  * Encode and decode a swap entry.  Swap entries are stored in the Linux

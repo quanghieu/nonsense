@@ -182,7 +182,22 @@ static inline pmd_t *pmd_offset(pud_t *pud, unsigned long addr)
 /* we don't need complex calculations here as the pmd is folded into the pgd */
 #define pmd_addr_end(addr,end) (end)
 
+#ifdef CONFIG_DATA_PROTECTION
+#include <linux/data_protection.h>
+static inline void kdp_set_pte_ext(pte_t *ptep, pte_t pte, unsigned ext)
+{
+    if (likely(kdp_enabled)) {
+        entry_gate();
+        shadow_set_pte_ext(ptep, pte, ext);
+        exit_gate();
+    } else {
+        cpu_set_pte_ext(ptep, pte, ext);
+    }
+}
+#define set_pte_ext(ptep,pte,ext) kdp_set_pte_ext(ptep,pte,ext)
+#else
 #define set_pte_ext(ptep,pte,ext) cpu_set_pte_ext(ptep,pte,ext)
+#endif
 #define pte_special(pte)	(0)
 static inline pte_t pte_mkspecial(pte_t pte) { return pte; }
 

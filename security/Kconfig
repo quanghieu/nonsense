@@ -15,6 +15,13 @@ config PAGE_GRANULARITY
 	depends on SECTION_COALESCE
 	default n
 
+config DATA_PROTECTION
+	bool "Protect sensitive kernel data structures"
+	depends on ARM
+	depends on SECTION_COALESCE
+	depends on PAGE_GRANULARITY
+	default n
+
 config SWTPM
 	tristate "Software TPM 2.0 support by kernel module"
 	depends on m

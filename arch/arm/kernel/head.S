@@ -55,6 +55,11 @@
 	.equ	swapper_pg_dir, KERNEL_RAM_VADDR - PG_DIR_SIZE
 #endif
 
+#ifdef CONFIG_DATA_PROTECTION
+	.globl	shadow_pg_dir
+	.equ	shadow_pg_dir, swapper_pg_dir - PG_DIR_SIZE
+#endif
+
 #ifdef CONFIG_SECTION_COALESCE
 	.globl  sc_status
 	.equ	sc_status, swapper_pg_dir + PG_DIR_SIZE
