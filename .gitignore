@@ -72,6 +72,11 @@ include/config
 include/generated
 arch/*/include/generated
 
+#
+# Generated files 
+#
+arch/arm/crypto/sha256-core.S
+
 # stgit generated dirs
 patches-*
 
