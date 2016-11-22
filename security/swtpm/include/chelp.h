@@ -173,7 +173,11 @@
 
 void *BIO_new_file(const char *filename, const char *mode);
 
+#ifdef CONFIG_SWTPM_PROTECTION
 void init_shadow_malloc(void);
+#else
+void inline init_shadow_malloc(void) { }
+#endif
 
 static inline int 
 atoi(const char *nptr)

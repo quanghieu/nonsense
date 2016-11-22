@@ -5,9 +5,34 @@
 
 #include <linux/random.h>
 #include <linux/slab.h>
+#include <linux/data_protection.h>
 
 #include <openssl/rand.h>
 #include <openssl/bn.h>
+
+#ifdef CONFIG_SWTPM_PROTECTION
+#define MAX_SHADOW_PAGES    120
+typedef struct {
+    void *address;
+    bool used;
+} shadow_page;
+
+shadow_page shadow_pages[MAX_SHADOW_PAGES];
+
+void init_shadow_malloc()
+{
+    unsigned int i;
+    for (i = 0; i < MAX_SHADOW_PAGES; i++) {
+        shadow_pages[i].address = NULL;
+        shadow_pages[i].used = false;
+    }
+    for (i = 0; i < MAX_SHADOW_PAGES; i++) {
+        while (shadow_pages[i].address == NULL)
+            shadow_pages[i].address = kmalloc(PAGE_SIZE, GFP_ATOMIC);
+        kdp_protect_one_page_none(shadow_pages[i].address);
+    }
+}
+#endif
 
 char *strerror(int errnum)
 {
@@ -56,19 +81,45 @@ void ERR_add_error_data_null(int num, ...)
 void *malloc(size_t size)
 {
     void *ptr = NULL;
+#ifdef CONFIG_SWTPM_PROTECTION
+    unsigned int i;
+    if (size <= PAGE_SIZE) {
+        for (i = 0; i < MAX_SHADOW_PAGES; i++) {
+            if (shadow_pages[i].used)
+                continue;
+            shadow_pages[i].used = true;
+            return shadow_pages[i].address;
+        }
+    }
+    pr_warn("[kdp] malloc: no shadow page or page size is too large (%d)\n", size);
+#endif
     ptr = kmalloc(size, GFP_ATOMIC);
+#ifdef CONFIG_SWTPM_PROTECTION
+    kdp_protect_one_page_none(ptr);
+#endif
     return ptr;
 }
 
 void free(void *ptr)
 {
+#ifdef CONFIG_SWTPM_PROTECTION
+    unsigned int i;
+    for (i = 0; i < MAX_SHADOW_PAGES; i++) {
+        if (shadow_pages[i].used && shadow_pages[i].address == ptr) {
+            shadow_pages[i].used = false;
+            return;
+        }
+    }
+    // unprotect page;
+    kdp_unprotect_one_page(ptr);
+#endif
     kfree(ptr);
 }
 
 void *realloc(void *ptr, size_t size)
 {
     void *new_ptr = kmalloc(size, GFP_ATOMIC);
-    LogInfo("realloc: ptr = 0x%p, size = %u", ptr, size);
+    pr_warn("[kdp] realloc: ptr = 0x%p, size = %u", ptr, size);
 
     memcpy(new_ptr, ptr, size);
     kfree(ptr);

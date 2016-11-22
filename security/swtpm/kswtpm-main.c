@@ -112,6 +112,7 @@ init_tpm_module(void)
     int res;
 
     LogInfo("TPM2 module initialize");
+    init_shadow_malloc();
 
     /* Initilize (ref: tpm2/Simulator/src/TPMCmds.c) */
     // TPM Manufacture
@@ -162,7 +163,7 @@ init_tpm_module(void)
     TPM_Open = 0;
     OutBuffer.BufferSize = 0;
 
-    LogInfo("TPM2 module initialization success!");
+    pr_info("TPM2 module initialization success!");
 	return SUCCESS;
 }
 
@@ -201,7 +202,7 @@ tpm_open(struct inode *inode, struct file *file)
 static int
 tpm_release(struct inode *inode, struct file *file)
 {
-    LogInfo("TPM2 release!");
+    pr_info("TPM2 release!");
     TPM_Open = 0;
     return 0;
 }
