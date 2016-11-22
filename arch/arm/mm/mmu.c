@@ -671,6 +671,24 @@ EXPORT_SYMBOL(phys_mem_access_prot);
 
 #define vectors_base()	(vectors_high() ? 0xffff0000 : 0)
 
+#ifdef CONFIG_PAGE_GRANULARITY
+#define pmd_pfn(pmd)    (((pmd_val(pmd) & PMD_MASK) & PHYS_MASK) >> PAGE_SHIFT)
+static void split_pmd(pmd_t *pmd, pte_t *pte)
+{
+    unsigned long pfn = pmd_pfn(*pmd);
+    int i = 0;
+
+    do {
+        /*
+         * Need to have the least restrictive permissions available
+         * permissions will be fixed up later
+         */
+        set_pte_ext(pte, pfn_pte(pfn, PAGE_KERNEL_EXEC), 0);
+        pfn++;
+    } while (pte++, i++, i < PTRS_PER_PTE);
+}
+#endif
+
 static void __init *early_alloc_aligned(unsigned long sz, unsigned long align)
 {
 	void *ptr = __va(memblock_alloc(sz, align));
@@ -691,6 +709,17 @@ static pte_t * __init early_pte_alloc(pmd_t *pmd, unsigned long addr, unsigned l
 		    pte = early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
 		__pmd_populate(pmd, __pa(pte), prot);
 	}
+
+#ifdef CONFIG_PAGE_GRANULARITY
+    if (pmd_bad(*pmd)) {
+        pte_t *pte = sc_early_alloc(PTE_HWTABLE_OFF + PTE_HWTABLE_SIZE);
+        split_pmd(pmd, pte);    // split section into pages
+
+        __pmd_populate(pmd, __pa(pte), prot);
+        flush_tlb_all();
+    }
+#endif
+
 	BUG_ON(pmd_bad(*pmd));
 	return pte_offset_kernel(pmd, addr);
 }
@@ -706,6 +735,7 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 	} while (pte++, addr += PAGE_SIZE, addr != end);
 }
 
+#ifndef CONFIG_PAGE_GRANULARITY
 static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 			unsigned long end, phys_addr_t phys,
 			const struct mem_type *type)
@@ -732,6 +762,7 @@ static void __init __map_init_section(pmd_t *pmd, unsigned long addr,
 
 	flush_pmd_entry(p);
 }
+#endif
 
 static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 				      unsigned long end, phys_addr_t phys,
@@ -747,6 +778,14 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 		 */
 		next = pmd_addr_end(addr, end);
 
+#ifdef CONFIG_PAGE_GRANULARITY
+        /*
+         * Try a page mapping - addr, next and phys must all be
+         * aligned to a page boundary.
+         */
+        alloc_init_pte(pmd, addr, next,
+                __phys_to_pfn(phys), type);
+#else
 		/*
 		 * Try a section mapping - addr, next and phys must all be
 		 * aligned to a section boundary.
@@ -758,6 +797,7 @@ static void __init alloc_init_pmd(pud_t *pud, unsigned long addr,
 			alloc_init_pte(pmd, addr, next,
 						__phys_to_pfn(phys), type);
 		}
+#endif
 
 		phys += next - addr;
 

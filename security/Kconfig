@@ -9,6 +9,12 @@ config SECTION_COALESCE
 	depends on ARM
 	default n
 
+config PAGE_GRANULARITY
+	bool "Using page granularity instead of section granularity"
+	depends on ARM
+	depends on SECTION_COALESCE
+	default n
+
 config SWTPM
 	tristate "Software TPM 2.0 support by kernel module"
 	depends on m
