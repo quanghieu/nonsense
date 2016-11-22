@@ -26,6 +26,10 @@ void kdp_enable(void);
 void kdp_protect_one_page(void *p);
 void kdp_protect_one_page_none(void *p);
 void kdp_unprotect_one_page(void *p);
+void protect_module(void *base,
+        unsigned long text_size,
+        unsigned long ro_size,
+        unsigned long total_size);
 void shadow_pmd_populate(pmd_t *pmdp, pmdval_t pmdval);
 void shadow_set_pte_ext(pte_t *ptep, pte_t pte, unsigned long ext);
 

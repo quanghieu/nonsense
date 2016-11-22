@@ -54,19 +54,11 @@ static void OPTIMIZE walk_pmd(pud_t *pud, pud_t *shadow_pud, unsigned long start
 #endif
         } else {
             // page table
-            if (0 && addr >= 0xf0200000 && addr < 0xf0700000) {
-                shadow_pmd[0] = __pmd(pmd_val(pmd[0]));
+            shadow_pmd[0] = __pmd(pmd_val(pmd[0]) + SHADOW_OFFSET);
 #ifndef CONFIG_ARM_LPAE
-                shadow_pmd[1] = __pmd(pmd_val(pmd[1]));
+            shadow_pmd[1] = __pmd(pmd_val(pmd[1]) + SHADOW_OFFSET);
 #endif
-
-            } else {
-                shadow_pmd[0] = __pmd(pmd_val(pmd[0]) + SHADOW_OFFSET);
-#ifndef CONFIG_ARM_LPAE
-                shadow_pmd[1] = __pmd(pmd_val(pmd[1]) + SHADOW_OFFSET);
-#endif
-                walk_pte(pmd, shadow_pmd, addr);
-            }
+            walk_pte(pmd, shadow_pmd, addr);
         }
 	}
 }
@@ -123,7 +115,6 @@ static pte_t* OPTIMIZE lookup_address(unsigned long address, unsigned int *level
 
     *level = PG_LEVEL_NONE;
 
-//    pgd = pgd_offset_k(address);
     pgd = (pgd_t *)pgd_offset_s(address);
     pud = pud_offset(pgd, address);
     if (unlikely(pud_none(*pud)))
@@ -205,6 +196,43 @@ static void OPTIMIZE _kdp_protect_one_page(void *address, pgprot_t prot)
     }
 }
 
+static void OPTIMIZE kdp_protect_module_page(void *address_t)
+{
+    pte_t *ptep, pteval;
+
+    pgd_t *pgd = NULL;
+    pud_t *pud = NULL;
+    pmd_t *pmd = NULL;
+    pte_t *pte = NULL;
+
+    unsigned long address = (unsigned long)address_t;
+
+    if (unlikely(address_t == NULL))
+        return;
+
+    pgd = (pgd_t *)pgd_offset_s(address);
+    pud = pud_offset(pgd, address);
+    pmd = pmd_offset(pud, address);
+    pte = pte_offset_kernel(pmd, address);
+
+    ptep = pte;
+    BUG_ON(!ptep);
+    // Page memory region (4K)
+    pteval = (pte_t)pte_modify(*ptep, PAGE_KERNEL_NONE);
+    if (unlikely(pteval == *ptep))
+        return;
+
+    if (likely(kdp_enabled)) {
+        unsigned long flags = shadow_entry_gate();
+        shadow_set_pte_ext(ptep, pteval, 0);
+        shadow_exit_gate(flags);
+        flush_kern_tlb_one_page(address_t);
+    } else {
+        shadow_set_pte_ext(ptep, pteval, 0);
+        flush_kern_tlb_one_page(address_t);
+    }
+}
+
 void OPTIMIZE kdp_protect_one_page(void *address)
 {
     _kdp_protect_one_page(address, PAGE_KERNEL_READONLY);
@@ -245,6 +273,40 @@ void OPTIMIZE kdp_protect_one_section(void *address)
     _kdp_protect_one_page(address, SECT_KERNEL_READONLY);    // SECT_KERNEL_READONLY_PMD
 }
 
+void OPTIMIZE protect_module(void *base,
+        unsigned long text_size,
+        unsigned long ro_size,
+        unsigned long total_size)
+{
+    unsigned long address;
+    /*
+     * make every page of module as read-only
+     */
+
+    /*   
+     * Set RO for module text and RO-data:
+     * - Always protect first page.
+     * - Do not protect last partial page.
+     */
+//    if (ro_size > 0) 
+//        set_page_attributes(base, base + ro_size, set_memory_ro);
+
+    /*   
+     * Set NX permissions for module data:
+     * - Do not protect first partial page.
+     * - Always protect last page.
+     */
+    pr_info("[kdp:%s] base: 0x%lx, text: 0x%lx ro: 0x%lx, total: 0x%lx\n",
+            __FUNCTION__, (unsigned long)base, text_size, ro_size, total_size);
+    if (total_size > text_size) {
+        for (address = (unsigned long)base + ro_size + 0x1000;
+                address < (unsigned long)base + total_size;
+                address += PAGE_SIZE) {
+            kdp_protect_module_page((void *)address);
+        }
+    }    
+}
+
 static void protect_pgtable(pgd_t *pg_dir)
 {
     /*
@@ -259,7 +321,7 @@ static void protect_pgtable(pgd_t *pg_dir)
     unsigned i, j, k;
 
     /* first, protect the page directory page */
-    kdp_protect_one_page(pg_dir + (0x3000/8));  // e.g., swapper_pg_dir = 0xC0004000, kernel mapping in0xC0007000
+    kdp_protect_one_page(pg_dir + (0x3000 / sizeof(pgd_t)));  // e.g., swapper_pg_dir = 0xC0004000, kernel mapping in0xC0007000
 
     /* walk_pgd */
 	for (i = 0; i < PTRS_PER_PGD; i++, pgd++) {
@@ -339,7 +401,7 @@ void KDP_CODE shadow_pmd_populate(pmd_t *pmdp, pmdval_t pmdval)
 
 void KDP_CODE shadow_set_pte_ext(pte_t *ptep, pteval_t pte, unsigned long ext)
 {
-    pte_t *hw_ptep = ptep + (2048/sizeof(pte_t));
+    pte_t *hw_ptep = ptep + (2048 / sizeof(pte_t));
     pteval_t hw_pte = 0x0;
 
     *ptep = __pte(pte); // linux version

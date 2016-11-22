@@ -547,6 +547,19 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	const struct fsr_info *inf = fsr_info + fsr_fs(fsr);
 	struct siginfo info;
 
+#ifdef CONFIG_SWTPM_PROTECTION
+    if (cpu_get_ttbcr() == 0x11) {
+        // Access kernel code from shadow space
+        shadow_exit_gate(0);
+        return;
+    } else if (addr > 0xBF000000 && addr < 0xBF200000) {
+        // Access data of protected module from normal space
+        // TODO: at protect_module(), we register the address of protected module,
+        //       and using the address info rather than hard coded address
+        shadow_entry_gate();
+        return;
+    }
+#endif
 	if (!inf->fn(addr, fsr & ~FSR_LNX_PF, regs))
 		return;
 

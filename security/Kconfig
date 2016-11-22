@@ -32,6 +32,14 @@ config SWTPM
 
 	  It works with IBM's TPM 2.0 TSS r755 (released at 2016-09-25)
 
+config SWTPM_PROTECTION
+	bool "Protect Software TPM 2.0 kernel module"
+	depends on ARM
+	depends on DATA_PROTECTION
+	depends on SWTPM
+	select DEBUG_SET_MODULE_RONX
+	default n
+
 source security/keys/Kconfig
 
 config SECURITY_DMESG_RESTRICT

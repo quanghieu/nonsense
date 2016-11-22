@@ -16,6 +16,7 @@
 #include <linux/miscdevice.h>
 #include <asm/uaccess.h>        /* for put_user */
 #include <linux/slab.h>
+#include <linux/data_protection.h>
 
 /* TPM 2.0 Engine */
 #include "TpmBuildSwitches.h"
@@ -162,8 +163,6 @@ init_tpm_module(void)
     OutBuffer.BufferSize = 0;
 
     LogInfo("TPM2 module initialization success!");
-    LogInfo("InputBuffer: 0x%p", InputBuffer);
-    LogInfo("OutputBuffer: 0x%p", OutputBuffer);
 	return SUCCESS;
 }
 
@@ -213,6 +212,7 @@ tpm_release(struct inode *inode, struct file *file)
 static ssize_t
 tpm_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 {
+    entry_gate();
     LogDebug("Start TPM read");
     if(OutBuffer.BufferSize > 0 ) {
         count = min(count, (size_t)OutBuffer.BufferSize - (size_t)(*ppos));
@@ -225,6 +225,7 @@ tpm_read(struct file *file, char *buf, size_t count, loff_t *ppos)
         count = 0;
     }
     LogDebug("Finish TPM read(%zd)", count);
+    exit_gate();
     return count;
 }
 
@@ -233,6 +234,7 @@ tpm_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 static ssize_t
 tpm_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
+    entry_gate();
     LogDebug("Start TPM write(%zd)", count);
 
     *ppos = 0;
@@ -246,10 +248,12 @@ tpm_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
     _plat__RunCommand(InBuffer.BufferSize, InBuffer.Buffer,
             &OutBuffer.BufferSize, &OutBuffer.Buffer);
     if(OutBuffer.BufferSize < 0) {
+        exit_gate();
         return -EILSEQ;
     }
 
 //    LogDebug("Finish TPM write(%zd)\n", (size_t)tpm_response.size);
+    exit_gate();
     return count;
 }
 

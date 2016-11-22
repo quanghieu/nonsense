@@ -189,6 +189,14 @@ static inline void kdp_set_pte_ext(pte_t *ptep, pte_t pte, unsigned ext)
     if (likely(kdp_enabled)) {
         entry_gate();
         shadow_set_pte_ext(ptep, pte, ext);
+#ifdef CONFIG_SWTPM_PROTECTION
+        // Software TPM 2.0 code range
+        // TODO: using kernel module's address info which obtained by protect_module()
+        //       rathern than hard coded address
+        if ((unsigned long)ptep >= 0xC0180000 && (unsigned long)ptep < 0xC0200000) {
+            shadow_set_pte_ext((pte_t *)((unsigned long)ptep + SHADOW_OFFSET), pte, ext);
+        }
+#endif
         exit_gate();
     } else {
         cpu_set_pte_ext(ptep, pte, ext);

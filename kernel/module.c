@@ -3277,6 +3277,15 @@ static noinline int do_init_module(struct module *mod)
 	mod->init_size = 0;
 	mod->init_ro_size = 0;
 	mod->init_text_size = 0;
+#ifdef CONFIG_SWTPM_PROTECTION
+    if (!strncmp(mod->name, "kswtpm", 6) && likely(kdp_enabled)) {
+        pr_info("[kdp] Protect kswtpm module\n");
+        protect_module(mod->module_core,
+                mod->core_text_size,
+                mod->core_ro_size,
+                mod->core_size);
+    }
+#endif
 	/*
 	 * We want to free module_init, but be aware that kallsyms may be
 	 * walking this with preempt disabled.  In all the failure paths, we

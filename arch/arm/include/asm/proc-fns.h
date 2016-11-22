@@ -149,6 +149,14 @@ extern void cpu_resume(void);
             : : "r" (ttbr));        \
     } while (0)
 
+#define cpu_get_ttbcr()                     \
+    ({                          \
+        unsigned long ttbcr;        \
+        __asm__("mrc    p15, 0, %0, c2, c0, 2"  \
+            : "=r" (ttbcr) : : "cc");   \
+        ttbcr;  \
+     })
+
 #define cpu_get_pgd()	\
 	({						\
 		unsigned long pg;			\

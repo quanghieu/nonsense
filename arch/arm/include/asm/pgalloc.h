@@ -151,6 +151,13 @@ static inline void __pmd_populate(pmd_t *pmdp, phys_addr_t pte,
         pmdp[1] = __pmd(pmdval + 256 * sizeof(pte_t));
 #endif
     }
+    if (likely(kdp_enabled)
+            && ((unsigned long)pmdp >= (unsigned long)swapper_pg_dir
+                && (unsigned long)pmdp < (unsigned long)(swapper_pg_dir + PG_DIR_SIZE))) {
+        entry_gate();
+        shadow_pmd_populate(pmdp - (PG_DIR_SIZE / sizeof(pmd_t)), pmdval + SHADOW_OFFSET);
+        exit_gate();
+    }
 	flush_pmd_entry(pmdp);
 }
 
