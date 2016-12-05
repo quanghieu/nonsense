@@ -1910,6 +1910,15 @@ static inline int ufshcd_read_unit_desc_param(struct ufs_hba *hba,
 				      param_offset, param_read_buf, param_size);
 }
 
+static inline int ufshcd_read_geometry_desc_param(struct ufs_hba *hba,
+				enum geometry_desc_param_offset param_offset,
+				u8 *param_read_buf, u32 param_size)
+{
+	return ufshcd_read_desc_param(hba, QUERY_DESC_IDN_GEOMETRY, 0,
+				      param_offset, param_read_buf, param_size);
+}
+
+
 /**
  * ufshcd_memory_alloc - allocate memory for host memory space data structures
  * @hba: per adapter instance
@@ -4314,6 +4323,19 @@ static struct rpmb_ops ufshcd_rpmb_dev_ops = {
 static inline void ufshcd_rpmb_add(struct ufs_hba *hba)
 {
 	struct rpmb_dev *rdev;
+	u8 rw_size;
+	int ret;
+
+	ret = ufshcd_read_geometry_desc_param(hba, GEOMETRY_DESC_RPMB_RW_SIZE,
+					&rw_size, sizeof(rw_size));
+	if (ret) {
+		dev_warn(hba->dev, "%s: cannot get rpmb rw limit %d\n",
+			 dev_name(hba->dev), ret);
+		/* fallback to singel frame write */
+		rw_size = 1;
+	}
+
+	ufshcd_rpmb_dev_ops.reliable_wr_cnt = rw_size;
 
 	scsi_device_get(hba->sdev_ufs_rpmb);
 	rdev = rpmb_dev_register(hba->dev, &ufshcd_rpmb_dev_ops);
