@@ -175,6 +175,12 @@ enum ufs_desc_max_size {
 	QUERY_DESC_RFU_MAX_SIZE			= 0x00,
 };
 
+enum geometry_desc_param_offset {
+	GEOMETRY_DESC_LEN		= 0x0,
+	GEOMETRY_DESC_TYPE		= 0x1,
+	GEOMETRY_DESC_RPMB_RW_SIZE	= 0x17,
+};
+
 /* Unit descriptor parameters offsets in bytes*/
 enum unit_desc_param {
 	UNIT_DESC_PARAM_LEN			= 0x0,
