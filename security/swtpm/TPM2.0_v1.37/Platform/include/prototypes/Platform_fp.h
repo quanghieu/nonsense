@@ -265,6 +265,16 @@ _plat__NvMemoryMove(
     unsigned int     size           // IN: size of data being moved
     );
 
+//***_plat__NvAtomicPrepare()
+// Get bitvector from RPMB (first block)
+// return type: int
+//  0       NV read success
+//  non-0   NV read fail
+LIB_EXPORT int
+_plat__NvAtomicPrepare(
+    void
+    );
+
 //***_plat__NvCommit()
 // Update NV chip
 // return type: int

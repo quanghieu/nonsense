@@ -16,6 +16,14 @@
 #include <linux/miscdevice.h>
 #include <asm/uaccess.h>        /* for put_user */
 #include <linux/slab.h>
+#include <helper.h>
+
+// for block device (NV cache)
+#include <linux/fs.h>
+#include <asm/segment.h>
+#include <asm/uaccess.h>
+#include <linux/buffer_head.h>
+
 #ifdef CONFIG_SWTPM_PROTECTION
 #include <linux/data_protection.h>
 #else
@@ -39,22 +47,19 @@
 #include "_TPM_Init_fp.h"
 #include "Startup_fp.h"
 
+#include "PlatformData.h"
+#include "Tpm.h"
+
 #ifndef __IGNORE_STATE__
 
 //#define MAX_BUFFER 1048576
 #define MAX_BUFFER 4096
 char OutputBuffer[MAX_BUFFER];      //The output data buffer for the simulator.
 char InputBuffer[MAX_BUFFER];       //The input data buffer for the simulator.
-struct in_buffer
-{
-    unsigned long BufferSize;
-    unsigned char *Buffer;
-} InBuffer;
-struct out_buffer
-{
+struct {
     uint32_t      BufferSize;
     unsigned char *Buffer;
-} OutBuffer;
+} InBuffer, OutBuffer;
 
 #endif // __IGNORE_STATE___
 
@@ -93,13 +98,16 @@ static int TPM_Open = 0;    /*
                              * Used to prevent multiple access to device
                              */
 
+static int TPM_Init = 0;    /*
+                             * Is tpm initialized?
+                             */
+
 struct file_operations tpm_fops = {
     .owner          = THIS_MODULE,
     .open           = tpm_open,
     .release        = tpm_release,
     .read           = tpm_read,
     .write          = tpm_write,
-//    .unlocked_ioctl = tpm_ioctl,
 };
 
 static struct miscdevice tpm_dev = {
@@ -111,31 +119,20 @@ static struct miscdevice tpm_dev = {
 
 //** Functions
 
-//*** init_tpm_module()
-// This function is called when the module is loaded
-static int __init
-init_tpm_module(void)
+static int
+init_tpm(void)
 {
     Startup_In in;
-    int res;
 
-    LogInfo("TPM2 module initialize");
-    init_shadow_malloc();
+    LogInfo("TPM2 initialize");
 
     /* Initilize (ref: tpm2/Simulator/src/TPMCmds.c) */
     // TPM Manufacture
-    _plat__NVEnable(NULL);
+//    _plat__NVEnable(NULL);
     if(TPM_Manufacture(1) != 0)
         return 1;
-    // Coverage test - repeated manufacturing attempt
-    if(TPM_Manufacture(0) != 1)
-        return 2;
-    // Coverage test - re-manufacturing
-    TPM_TearDown();
-    if(TPM_Manufacture(1) != 0)
-        return 3;
     // Disable NV memory
-    _plat__NVDisable();
+//    _plat__NVDisable();
 
     /* Powerup (ref: ibmtss356/powerup.c) */
     // Pass power on signal to platform
@@ -155,6 +152,25 @@ init_tpm_module(void)
     in.startupType = TPM_SU_CLEAR;
     TPM2_Startup(&in);
 
+    TPM_Init = 1;
+    LogInfo("TPM2 initialize finish!! go.cloudClock(%llu)", go.cloudClock);
+
+    return 0;
+}
+
+//*** init_tpm_module()
+// This function is called when the module is loaded
+static int __init
+init_tpm_module(void)
+{
+    int res;
+
+    LogInfo("TPM2 module initialize");
+    s_moduleInit = false;
+    init_helper();
+#ifdef CONFIG_SWTPM_PROTECTION
+    init_shadow_malloc();
+#endif
 
     /*
      * Create the "tpm" device in the /sys/class/misc directory.
@@ -171,7 +187,11 @@ init_tpm_module(void)
     TPM_Open = 0;
     OutBuffer.BufferSize = 0;
 
-    pr_info("TPM2 module initialization success!");
+    pr_info("TPM2 module initialization success!\n");
+
+#ifdef HELPER
+    s_moduleInit = true;
+#endif
 	return SUCCESS;
 }
 
@@ -180,13 +200,10 @@ init_tpm_module(void)
 static void __exit
 cleanup_tpm_module(void)
 {
-    int ret;
-
     TPM_TearDown();
     // Unregist the device
-    ret = misc_deregister(&tpm_dev);
-    if(ret < 0)
-        LogError("Error in misc_deregister: %d", ret);
+    misc_deregister(&tpm_dev);
+    cleanup_helper();
     LogInfo("Cleaning up TPM2 module.");
 }
 
@@ -197,7 +214,6 @@ cleanup_tpm_module(void)
 static int
 tpm_open(struct inode *inode, struct file *file)
 {
-    LogInfo("TPM2 open!");
     if(TPM_Open)
         return -EBUSY;
 
@@ -210,7 +226,6 @@ tpm_open(struct inode *inode, struct file *file)
 static int
 tpm_release(struct inode *inode, struct file *file)
 {
-    pr_info("TPM2 release!");
     TPM_Open = 0;
     return 0;
 }
@@ -222,7 +237,6 @@ static ssize_t
 tpm_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 {
     entry_gate();
-    LogDebug("Start TPM read");
     if(OutBuffer.BufferSize > 0 ) {
         count = min(count, (size_t)OutBuffer.BufferSize - (size_t)(*ppos));
         count -= copy_to_user(buf, &OutBuffer.Buffer[*ppos], count);
@@ -233,7 +247,6 @@ tpm_read(struct file *file, char *buf, size_t count, loff_t *ppos)
     } else {
         count = 0;
     }
-    LogDebug("Finish TPM read(%zd)", count);
     exit_gate();
     return count;
 }
@@ -243,17 +256,20 @@ tpm_read(struct file *file, char *buf, size_t count, loff_t *ppos)
 static ssize_t
 tpm_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
+    int ret;
     entry_gate();
-    LogDebug("Start TPM write(%zd)", count);
 
     *ppos = 0;
-
-    InBuffer.Buffer = (BYTE*)buf;
+    InBuffer.Buffer = (BYTE*)&InputBuffer;
     InBuffer.BufferSize = count;
     OutBuffer.BufferSize = MAX_BUFFER;
     OutBuffer.Buffer = (unsigned char *)&OutputBuffer;
 
+    ret = copy_from_user(InputBuffer, buf, count);
     // Do implementation-specific command dispatch
+    _plat__NvAtomicPrepare();
+    if (!TPM_Init)
+        init_tpm();
     _plat__RunCommand(InBuffer.BufferSize, InBuffer.Buffer,
             &OutBuffer.BufferSize, &OutBuffer.Buffer);
     if(OutBuffer.BufferSize < 0) {
@@ -261,7 +277,6 @@ tpm_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         return -EILSEQ;
     }
 
-//    LogDebug("Finish TPM write(%zd)\n", (size_t)tpm_response.size);
     exit_gate();
     return count;
 }

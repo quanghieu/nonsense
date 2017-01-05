@@ -47,6 +47,11 @@ unsigned char        s_NV[NV_MEMORY_SIZE];
 BOOL                 s_NvIsAvailable;
 BOOL                 s_NV_unrecoverable;
 BOOL                 s_NV_recoverable;
+BOOL                 s_NvAtomicIsPrepared;
+rpmb_atomic_t        s_NvAtomic[NV_MEMORY_SIZE/256];   // used to atomic write, 256 is RPMB block size
 
 // From PPPlat.c
 BOOL  s_physicalPresence;
+
+// For Helper.c
+BOOL                 s_moduleInit;

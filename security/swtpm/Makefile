@@ -1,5 +1,7 @@
 ARM					:= 1
 DEBUG_MSG			:= 1
+MODULE				:= 1
+HELPER				:= 1
 
 EXTRA_CFLAGS		+= -Wframe-larger-than=8192 -include chelp.h
 EXTRA_CFLAGS		+= -DNO_FILE_BACKED_NV
@@ -12,10 +14,29 @@ ifeq ($(DEBUG_MSG), 1)
 EXTRA_CFLAGS		+= -DDEBUG_MSG
 endif
 
+ifeq ($(MODULE), 1)
+ifeq ($(ARM), 1)
+export ARCH=arm
+export CROSS_COMPILE=arm-linux-gnueabihf-
+KERNEL_BUILD		:= /home/youngsup/odroid/odroidxu4-v4.2-rc1
+else
+KERNEL_RELEASE		:= $(shell uname -r)
+KERNEL_BUILD		:= /lib/modules/$(KERNEL_RELEASE)/build
+endif
+DESTDIR				:= $(CURDIR)/build
+CONFIG_SWTPM		:= m
+endif
+
 # module settings
 MODULE_NAME				:= kswtpm
 obj-$(CONFIG_SWTPM)		+= $(MODULE_NAME).o
 $(MODULE_NAME)-y		:= kswtpm-main.o chelp.o
+
+ifeq ($(HELPER), 1)
+EXTRA_CFLAGS			+= -DHELPER
+$(MODULE_NAME)-y		+= helper.o rpmb.o aes.o
+endif
+
 
 TPM2					:= TPM2.0_v1.37
 CRYPTO					:= openssl-1.0.0s
@@ -686,4 +707,23 @@ $(MODULE_NAME)-y	+= $(CRYPTO)/crypto/x509v3/v3_sxnet.o
 $(MODULE_NAME)-y	+= $(CRYPTO)/crypto/x509v3/v3_utl.o
 $(MODULE_NAME)-y	+= $(CRYPTO)/crypto/x509v3/v3err.o
 
+
+all:
+	@$(MAKE) -C $(KERNEL_BUILD) M=$(CURDIR) modules
+
+clean:
+	@$(MAKE) -C $(KERNEL_BUILD) M=$(CURDIR) clean
+	@rm -f Modules.symvers kswtpm.rules
+
+TPM_GROUP			?= tss
+INSTALL				?= install
+
+kswtpm.rules: kswtpm.rules.in
+	@sed -e "s/\$$TPM_GROUP/$(TPM_GROUP)/g" kswtpm.rules.in > kswtpm.rules
+
+install: kswtpm.rules
+	@$(MAKE) -C $(KERNEL_BUILD) M=$(CURDIR) INSTALL_MOD_PATH=$(DESTDIR) modules_install
+	@$(INSTALL) -m 644 -D kswtpm.rules $(DESTDIR)/etc/udev/rules.d/80-kswtpm.rules
+
+.PHONY: all clean install
 

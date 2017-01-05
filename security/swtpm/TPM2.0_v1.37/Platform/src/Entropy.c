@@ -10,6 +10,19 @@
 #include <memory.h>
 #include "PlatformData.h"
 #include "Platform_fp.h"
+#include "Tpm.h"
+#ifdef HELPER
+#include <helper.h>
+
+#define DRBG_TEST_INITIATE_ENTROPY \
+        0x0d, 0x15, 0xaa, 0x80, 0xb1, 0x6c, 0x3a, 0x10, \
+        0x90, 0x6c, 0xfe, 0xdb, 0x79, 0x5d, 0xae, 0x0b, \
+        0x5b, 0x81, 0x04, 0x1c, 0x5c, 0x5b, 0xfa, 0xcb, \
+        0x37, 0x3d, 0x44, 0x40, 0xd9, 0x12, 0x0f, 0x7e, \
+        0x3d, 0x6c, 0xf9, 0x09, 0x86, 0xcf, 0x52, 0xd8, \
+        0x5d, 0x3e, 0x94, 0x7d, 0x8c, 0x06, 0x1f, 0x91
+const BYTE hDRBG_NistTestVector_Entropy[] = {DRBG_TEST_INITIATE_ENTROPY};
+#endif
 
 
 //** Local values
@@ -55,6 +68,23 @@ _plat__GetEntropy(
 
     // Only provide entropy 32 bits at a time to test the ability
     // of the caller to deal with partial results.
+#ifdef HELPER
+    if(s_moduleInit) {
+        if (gp.validEntropy == 0) {
+            LogDebug("Entropy cache is empty, try to get from cloud");
+            gp.validEntropy = _cloud__GetEntropy(gp.entropy);
+            if (gp.validEntropy == 0)
+                gp.validEntropy = 64;
+        }
+
+        gp.validEntropy--;
+        rndNum = gp.entropy[gp.validEntropy];
+    } else if(amount == sizeof(hDRBG_NistTestVector_Entropy)) {
+        memcpy(entropy, hDRBG_NistTestVector_Entropy,
+                sizeof(hDRBG_NistTestVector_Entropy));
+        return sizeof(hDRBG_NistTestVector_Entropy);
+    } else
+#endif
     rndNum = rand();
     if(firstValue)
         firstValue = 0;

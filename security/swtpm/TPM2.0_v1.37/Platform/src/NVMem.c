@@ -16,6 +16,7 @@
 #include <assert.h>
 #include "PlatformData.h"
 #include "Platform_fp.h"
+#include <helper.h>
 
 //**Functions
 
@@ -110,6 +111,11 @@ _plat__NVEnable(
         fread(s_NV, NV_MEMORY_SIZE, 1, s_NVFile);
     }
 #endif
+
+    // Log from RPMB
+    // Error occured
+//    _plat__NvMemoryRead(0, NV_MEMORY_SIZE, NULL);
+
     // NV contents have been read and the error checks have been performed. For
     // simulation purposes, use the signaling interface to indicate if an error is
     // to be simulated and the type of the error.
@@ -172,8 +178,13 @@ _plat__NvMemoryRead(
 {
     assert(startOffset + size <= NV_MEMORY_SIZE);
 
+    // Read data from RPMB
+    if(s_moduleInit)
+        _rpmb__NvRead(startOffset, size);
+
     // Copy data from RAM
-    memcpy(data, &s_NV[startOffset], size);
+    if (data != NULL)
+        memcpy(data, &s_NV[startOffset], size);
     return;
 }
 
@@ -211,6 +222,10 @@ _plat__NvMemoryWrite(
 
     // Copy the data to the NV image
     memcpy(&s_NV[startOffset], data, size);
+
+    // Update RPMB
+    if(s_moduleInit)
+        _rpmb__NvWrite(startOffset, size);
 }
 
 //***_plat__NvMemoryClear()
@@ -226,6 +241,10 @@ _plat__NvMemoryClear(
 
     // In this implementation, assume that the errase value for NV is all 1s
     memset(&s_NV[start], 0xff, size);
+
+    // Update RPMB
+    if(s_moduleInit)
+        _rpmb__NvWrite(start, size);
 }
 
 //***_plat__NvMemoryMove()
@@ -245,7 +264,30 @@ _plat__NvMemoryMove(
     // Move data in RAM
     memmove(&s_NV[destOffset], &s_NV[sourceOffset], size);
 
+    // Update RPMB
+    if(s_moduleInit) {
+        _rpmb__NvWrite(sourceOffset, size);
+        _rpmb__NvWrite(destOffset, size);
+    }
     return;
+}
+
+//***_plat__NvAtomicPrepare()
+// Get bitvector from RPMB (first block)
+// return type: int
+//  0       NV read success
+//  non-0   NV read fail
+LIB_EXPORT int
+_plat__NvAtomicPrepare(
+        void
+        )
+{
+    if(s_moduleInit && !s_NvAtomicIsPrepared) {
+        _rpmb__NvAtomicPrepare(s_NvAtomic);
+        s_NvAtomicIsPrepared = true;
+    }
+
+    return 0;
 }
 
 //***_plat__NvCommit()
@@ -258,6 +300,10 @@ _plat__NvCommit(
     void
     )
 {
+    if(s_moduleInit) {
+        _rpmb__NvAtomicCommit(s_NvAtomic);
+        return 0;
+    }
 #ifdef FILE_BACKED_NV
     // If NV file is not available, return failure
     if(s_NVFile == NULL)

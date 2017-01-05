@@ -807,6 +807,13 @@ typedef struct
     CLOCK_NONCE         timeEpoch;
 #endif
 
+//*****************************************************************************
+//           Entropy
+//*****************************************************************************
+    // Entropy Cache
+    UINT32              entropy[64];        // Entropy from cloud
+    UINT16              validEntropy;       // Valid entropy count
+
 } PERSISTENT_DATA;
 
 extern PERSISTENT_DATA  gp;
@@ -833,6 +840,7 @@ typedef struct orderly_data
     UINT64              clock;              // The orderly version of clock
     TPMI_YES_NO         clockSafe;          // Indicates if the clock value is
                                             // safe.
+    UINT64              cloudClock;         // Last clock from cloud
 
     // In many implementations, the quality of the entropy available is not that
     // high. To compensate, the current value of the drbgState can be saved and

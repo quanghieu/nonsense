@@ -77,6 +77,16 @@ extern unsigned char     s_NV[NV_MEMORY_SIZE];
 extern BOOL              s_NvIsAvailable;
 extern BOOL              s_NV_unrecoverable;
 extern BOOL              s_NV_recoverable;
+extern BOOL              s_NvAtomicIsPrepared;
+
+// To support atomic write
+typedef struct {
+    uint32_t    atomic;
+    uint32_t    encrypt;
+    uint32_t    localVersion;
+    uint32_t    commitVersion;
+} rpmb_atomic_t;
+extern rpmb_atomic_t     s_NvAtomic[NV_MEMORY_SIZE/256];
 
 
 // From PPPlat.c
@@ -91,5 +101,6 @@ extern uint32_t        lastEntropy;
 
 extern int             firstValue;
 
+extern BOOL            s_moduleInit;
 
 #endif // _PLATFORM_DATA_H_

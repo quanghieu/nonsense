@@ -26,7 +26,7 @@
 
 // Comment these out as needed
 #ifndef SIMULATION
-#  define SIMULATION
+//#  define SIMULATION
 #endif
 
 // Define this to run the function that checks the format compatibility for the

@@ -14,7 +14,11 @@
 #include "PlatformData.h"
 #include "Platform_fp.h"
 #include "TpmFail_fp.h"
+#include "Tpm.h"
 #include <assert.h>
+#ifdef HELPER
+#include <helper.h>
+#endif
 
 //** Simulator Functions
 //*** Introduction
@@ -86,6 +90,15 @@ _plat__TimerRead(
     uint64_t        adjusted;
 #ifdef _ARM_
     uint64_t        tmp;
+#endif
+
+#ifdef HELPER
+    if (s_moduleInit) {
+        if (go.cloudClock == 0) {
+            go.cloudClock = _cloud__TimerRead();
+            LogDebug("Update cloud clock! cloud(%llu), local(%llu)", go.cloudClock, clock());
+        }
+    }
 #endif
 
 #   define  TOP     (THOUSAND * CLOCK_NOMINAL)
