@@ -5,13 +5,15 @@
 
 #include <linux/random.h>
 #include <linux/slab.h>
+#ifdef CONFIG_SWTPM_PROTECTION
 #include <linux/data_protection.h>
+#endif
 
 #include <openssl/rand.h>
 #include <openssl/bn.h>
 
 #ifdef CONFIG_SWTPM_PROTECTION
-#define MAX_SHADOW_PAGES    120
+#define MAX_SHADOW_PAGES    150
 typedef struct {
     void *address;
     bool used;
@@ -91,7 +93,7 @@ void *malloc(size_t size)
             return shadow_pages[i].address;
         }
     }
-    pr_warn("[kdp] malloc: no shadow page or page size is too large (%d)\n", size);
+    pr_info("[kdp] malloc: no shadow page or page size is too large (%d)\n", size);
 #endif
     ptr = kmalloc(size, GFP_ATOMIC);
 #ifdef CONFIG_SWTPM_PROTECTION
@@ -111,6 +113,7 @@ void free(void *ptr)
         }
     }
     // unprotect page;
+    pr_info("[kdp] free: kdp_unprotect_one_page\n");
     kdp_unprotect_one_page(ptr);
 #endif
     kfree(ptr);
@@ -119,7 +122,7 @@ void free(void *ptr)
 void *realloc(void *ptr, size_t size)
 {
     void *new_ptr = kmalloc(size, GFP_ATOMIC);
-    pr_warn("[kdp] realloc: ptr = 0x%p, size = %u", ptr, size);
+    pr_info("[kdp] realloc: ptr = 0x%p, size = %lu", ptr, size);
 
     memcpy(new_ptr, ptr, size);
     kfree(ptr);

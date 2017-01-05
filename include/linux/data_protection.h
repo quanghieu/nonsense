@@ -48,6 +48,9 @@ void shadow_exit_gate(unsigned long);
 #define entry_gate()
 #define exit_gate()
 #define shadow_pmd_populate(pmdp, pmdval)
+#define kdp_protect_one_page(p)
+#define kdp_protect_one_page_none(p)
+#define kdp_unprotect_one_page(p)
 
 #endif  /* CONFIG_DATA_PROTECTION */
 

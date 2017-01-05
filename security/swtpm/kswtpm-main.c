@@ -16,7 +16,15 @@
 #include <linux/miscdevice.h>
 #include <asm/uaccess.h>        /* for put_user */
 #include <linux/slab.h>
+#ifdef CONFIG_SWTPM_PROTECTION
 #include <linux/data_protection.h>
+#else
+#undef entry_gate
+#undef exit_gate
+#define entry_gate()
+#define exit_gate()
+#endif
+
 
 /* TPM 2.0 Engine */
 #include "TpmBuildSwitches.h"
