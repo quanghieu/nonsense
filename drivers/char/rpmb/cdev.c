@@ -20,6 +20,7 @@
 #include <linux/capability.h>
 
 #include <linux/rpmb.h>
+#include <linux/debug_rpmb.h>
 
 #include "rpmb-cdev.h"
 
@@ -169,7 +170,7 @@ static long rpmb_ioctl_seq_cmd(struct rpmb_dev *rdev,
 	/* some archs have issues with 64bit get_user */
 	if (copy_from_user(&ncmds, &ptr->num_of_cmds, sizeof(ncmds)))
 		return -EFAULT;
-
+	printk("Number of command is %u\n",ncmds);
 	if (ncmds > 3) {
 		dev_err(&rdev->dev, "supporting up to 3 packets (%llu)\n",
 			ncmds);
@@ -185,8 +186,12 @@ static long rpmb_ioctl_seq_cmd(struct rpmb_dev *rdev,
 		ret = rpmb_cmd_copy_from_user(&cmds[i], &ucmds[i]);
 		if (ret)
 			goto out;
+		pr_info("Current is %u",i);
+                pr_info("Flags = %u\n",cmds[i].flags);
+		pr_info("Nframes = %u\n",cmds[i].nframes);
+		dbg_dump_frame("Prepare to execute: ",cmds[i].frames);
 	}
-
+	
 	ret = rpmb_cmd_seq(rdev, cmds, ncmds);
 	if (ret)
 		goto out;
@@ -265,6 +270,7 @@ static long rpmb_ioctl(struct file *fp, unsigned int cmd, unsigned long arg)
 	struct rpmb_dev *rdev = fp->private_data;
 	void __user *ptr = (void __user *)arg;
 
+	pr_info("User pointer %px\n",ptr);
 	switch (cmd) {
 	case RPMB_IOC_REQ_CMD:
 		return rpmb_ioctl_req_cmd(rdev, ptr);

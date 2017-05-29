@@ -76,6 +76,7 @@
 #include <openssl/engine.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
+#include <linux/debug_rpmb.h>
 
 #include "linux/rpmb.h"
 
@@ -166,12 +167,9 @@ dump_hex_buffer(const char *title, const void *buf, size_t len)
 		__dump_buffer(pbuf);
 }
 
-static void dbg_dump_frame(const char *title, const struct rpmb_frame *f)
+void dbg_dump_frame(const char *title, const struct rpmb_frame *f)
 {
 	uint16_t result, req_resp;
-
-	if (!verbose)
-		return;
 
 	if (!f)
 		return;

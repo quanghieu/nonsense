@@ -342,8 +342,8 @@ static void protect_pgtable(pgd_t *pg_dir)
                     continue;
 
                 /* finally, protect valid pte pages */
-                pr_info("we need to protect the pte page by pmd entry: 0x%p(= 0x%x)\n", pmd, pmd_val(*pmd));
-                pr_info(" - pte_offset_kernel(pmd, 0) = 0x%p\n", pte_offset_kernel(pmd, 0));
+//                pr_info("we need to protect the pte page by pmd entry: 0x%p(= 0x%x)\n", pmd, pmd_val(*pmd));
+//                pr_info(" - pte_offset_kernel(pmd, 0) = 0x%p\n", pte_offset_kernel(pmd, 0));
                 pte = pte_offset_kernel(pmd, 0);
                 kdp_protect_one_page(pte);
             }

@@ -300,10 +300,10 @@ _plat__NvCommit(
     void
     )
 {
-    if(s_moduleInit) {
+//    if(s_moduleInit) {
         _rpmb__NvAtomicCommit(s_NvAtomic);
         return 0;
-    }
+//    }
 #ifdef FILE_BACKED_NV
     // If NV file is not available, return failure
     if(s_NVFile == NULL)

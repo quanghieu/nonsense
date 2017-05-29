@@ -59,11 +59,14 @@
 
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
+#include <linux/rpmb.h>
+#include <linux/slab.h>
 
 #include "linux/rpmb.h"
 #include "rpmb.h"
 #include "helper.h"
 #include "aes.h"
+#include <linux/rpmb.h>
 
 #include "Tpm.h"
 #include "CryptHash_fp.h"
@@ -75,7 +78,7 @@
 
 bool verbose;
 #define rpmb_dbg(fmt, ARGS...) do {         \
-	if (verbose)                            \
+	if (verbose)                             \
 		pr_debug("rpmb: " fmt, ##ARGS);       \
 } while (0)
 
@@ -119,7 +122,10 @@ static TPM2B_DIGEST     hmacKey;
 
 static uint32_t rpmb_write_counter;
 static uint32_t cloud_write_counter;
-
+struct rpmb_seq_ioc {
+        struct rpmb_ioc_seq_cmd h;
+        struct rpmb_ioc_cmd cmd[3];
+}; 
 static const char *rpmb_op_str(uint16_t op)
 {
 #define RPMB_OP(_op) case RPMB_##_op: return #_op
@@ -191,12 +197,12 @@ dump_hex_buffer(const char *title, const void *buf, size_t len)
 		__dump_buffer(pbuf);
 }
 
-static void dbg_dump_frame(const char *title, const struct rpmb_frame *f)
+void dbg_dump_frame(const char *title, const struct rpmb_frame *f)
 {
 	uint16_t result, req_resp;
 
-	if (!verbose)
-		return;
+//	if (!verbose)
+//		return;
 
 	if (!f)
 		return;
@@ -331,6 +337,218 @@ static int rpmb_check_mac(const unsigned char *key,
 	return 0;
 }
 
+static int rpmb_cmd_copy(struct rpmb_cmd *cmd,
+			struct rpmb_ioc_cmd *ucmd)
+{
+	size_t sz;
+	struct rpmb_frame *frames;
+	u64 frames_ptr;
+
+	memcpy(cmd,ucmd,sizeof(u32) + sizeof(u32));
+	pr_info("Number of frame: %u\n",cmd->nframes);
+	if (cmd->nframes > 255)
+		return -EOVERFLOW;
+
+	if (!cmd->nframes)
+		return -EINVAL;
+
+	/* some archs have issues with 64bit get_user */
+//	memcpy(&frames_ptr, ucmd->frames_ptr, sizeof(frames_ptr));
+//	pr_info("Copy 1\n");
+	dbg_dump_frame("User frame: ",&(ucmd->frames_ptr));
+	sz = cmd->nframes * sizeof(struct rpmb_frame);
+	frames = kmalloc(sz, GFP_KERNEL);
+	memcpy(frames, &ucmd->frames_ptr, sz);
+	pr_info("Copy 2\n");
+	cmd->frames = frames;
+	dbg_dump_frame("Input frame: ",frames);
+	return 0;
+}
+
+static long rpmb_seq_cmd(struct rpmb_dev *rdev,
+			       struct rpmb_seq_ioc *ptr)
+{
+	__u64 ncmds;
+	struct rpmb_cmd *cmds;
+	struct rpmb_ioc_cmd *ucmds;
+
+	int i;
+	int ret;
+
+	ncmds = ptr->h.num_of_cmds;
+   	pr_info("Entered rpmb_seq_cmd\n");
+	if (ncmds > 3) {
+		dev_err(&rdev->dev, "supporting up to 3 packets (%llu)\n",
+			ncmds);
+		return -EINVAL;
+	}
+
+	pr_info("Kcalloc\n");
+	cmds = kcalloc(ncmds, sizeof(*cmds), GFP_KERNEL);
+	if (!cmds)
+		return -ENOMEM;
+
+	ucmds = (struct rpmb_ioc_cmd *)(ptr->cmd);
+	
+	for (i = 0; i < ncmds; i++) {
+		rpmb_cmd_copy(&cmds[i], &ucmds[i]);
+//		if (ret)
+//			goto out;
+	}
+	pr_info("Cmds:");
+	for(i = 0; i < sizeof(struct rpmb_cmd); i++){
+		printk("%x ",cmds[i]);
+	}
+	ret = rpmb_cmd_seq(rdev,cmds, ncmds);
+	pr_info("Done rpmb_cmd_seq\n");
+	if (ret)
+		goto out;
+
+//	for (i = 0; i < ncmds; i++) {
+//		ret = rpmb_cmd_copy_to_user(&ucmds[i], &cmds[i]);
+//		if (ret)
+//			goto out;
+//	}
+out:
+	for (i = 0; i < ncmds; i++)
+		kfree(cmds[i].frames);
+	kfree(cmds);
+	return ret;
+}
+
+static void rpmb_cmd_fixup(struct rpmb_dev *rdev,
+			   struct rpmb_cmd *cmds, u32 ncmds)
+{
+	int i;
+
+	if (rdev->ops->type != RPMB_TYPE_EMMC)
+		return;
+
+	/* Fixup RPMB_READ_DATA specific to eMMC
+	 * The block count of the RPMB read operation is not indicated
+	 * in the original RPMB Data Read Request packet.
+	 * This is different then implementation for other protocol
+	 * standards.
+	 */
+	for (i = 0; i < ncmds; i++)
+		if (cmds->frames->req_resp == cpu_to_be16(RPMB_READ_DATA)) {
+			dev_dbg(&rdev->dev, "Fixing up READ_DATA frame to block_count=0\n");
+			cmds->frames->block_count = 0;
+		}
+}
+
+/**
+ * rpmb_cmd_seq - send RPMB command sequence
+ *
+ * @rdev: rpmb device
+ * @cmds: rpmb command list
+ * @ncmds: number of commands
+ *
+ * Return: 0 on success
+ *         -EINVAL on wrong parameters
+ *         -EOPNOTSUPP if device doesn't support the requested operation
+ *         < 0 if the operation fails
+ */
+int rpmb_cmd_seq_mod(struct rpmb_dev *rdev, struct rpmb_cmd *cmds, u32 ncmds)
+{
+	int err;
+	int i = 0;
+	printk("Enter rpmb_cmd_seq");
+	if (!rdev || !cmds || !ncmds)
+		return -EINVAL;
+        printk("Command: ");
+	for(i = 0; i<sizeof(struct rpmb_cmd);i++){
+		printk("%x",cmds[i]);
+	}
+	mutex_lock(&rdev->lock);
+	err = -EOPNOTSUPP;
+	if (rdev->ops && rdev->ops->cmd_seq) {
+		rpmb_cmd_fixup(rdev, cmds, ncmds);
+		err = rdev->ops->cmd_seq(rdev->dev.parent, cmds, ncmds);
+		printk("RPMB Op: %px",rdev->ops->cmd_seq);
+	}
+	mutex_unlock(&rdev->lock);
+	return err;
+}
+
+static int rpmb_seq(uint16_t req, 
+        const struct rpmb_frame *frames_in,
+        unsigned int cnt_in,
+        struct rpmb_frame *frames_out,
+        unsigned int cnt_out)
+{
+    int ret; 
+    struct rpmb_seq_ioc iseq;
+//    struct rpmb_ioc_seq_cmd iseq;
+    struct rpmb_frame *frame_res = NULL;
+    struct rpmb_dev *rdev;
+    int i;
+    int j;
+    uint32_t flags;
+    struct rpmb_cmd *cmds;
+    struct rpmb_frame *frames;
+
+    printk("Entered rpmb_seq\n");
+    rdev = rpmb_dev_get_by_type(RPMB_TYPE_EMMC);
+    printk("After get r_dev %px",rdev);
+    rpmb_dbg("RPMB OP SEQ: %s\n", rpmb_op_str(req));
+    pr_info("Counter in is: %d\n",cnt_in);
+    dbg_dump_frame("RPMB_SEQ In Frame: ", frames_in);
+
+    i = 0; 
+    flags = RPMB_F_WRITE;
+    if (req == RPMB_WRITE_DATA || req == RPMB_PROGRAM_KEY)
+        flags |= RPMB_F_REL_WRITE;
+    rpmb_ioc_cmd_set(iseq.cmd[i], flags, frames_in, cnt_in);
+    i++; 
+
+    if (req == RPMB_WRITE_DATA || req == RPMB_PROGRAM_KEY) {
+        frame_res = rpmb_alloc_frames(1);
+        if (!frame_res)
+            return -ENOMEM;
+        frame_res->req_resp =  htobe16(RPMB_RESULT_READ);
+        rpmb_ioc_cmd_set(iseq.cmd[i], RPMB_F_WRITE, frame_res, 1);
+        i++; 
+    }
+
+    rpmb_ioc_cmd_set(iseq.cmd[i], 0, frames_out, cnt_out);
+    i++;
+    pr_info("Nearly done %d\n",i);
+
+//    rpmb_seq_cmd(rdev,&iseq); 
+    cmds = kcalloc(i, sizeof(*cmds), GFP_KERNEL);
+
+    pr_info("Pass kcalloc\n");
+	cmds[0].flags = flags;
+	cmds[0].nframes = 1;
+        cmds[0].frames = frames_in;
+    pr_info("Pass phase 1\n");
+    if(i == 2){
+   	cmds[1].flags = 0;
+        cmds[1].nframes = 1;
+        cmds[1].frames = frames_out;
+    }
+    else if(i == 3){
+	cmds[1].flags = RPMB_F_WRITE;
+	cmds[1].nframes = 1;
+        cmds[1].frames = frame_res;
+
+	cmds[2].flags = 0;
+        cmds[2].nframes = 1;
+        cmds[2].frames = frames_out;
+
+    }
+    pr_info("Prepare to enter seq_mod\n");   
+    rpmb_cmd_seq(rdev,cmds, i);
+
+    ret = rpmb_check_req_resp(req, frames_out);
+
+    dbg_dump_frame("Res Frame: ", frame_res);
+    dbg_dump_frame("Out Frame: ", frames_out);
+    free(frame_res);
+    return ret;
+}
+
 static int rpmb_rw(
         uint32_t                 command,
         uint16_t                 req,
@@ -360,9 +578,12 @@ static int rpmb_rw(
     reqBuf->size = 6 + sizeof(cnt_in) + sizeof(cnt_out) + sizeof(struct rpmb_frame) * cnt_in;
 
 	rpmb_dbg("RPMB OP: %s\n", rpmb_op_str(req));
-	dbg_dump_frame("In Frame: ", frames_in);
-
-    while (resBuf->size == 0)
+	dbg_dump_frame("In Frame: ", frames_in); 
+    printk("Enter rpmb_seq\n");
+    if(command == COMMAND_RPMB){
+    	rpmb_seq(req, frames_in, cnt_in, frames_out, cnt_out);
+    }
+/*    while (resBuf->size == 0)
         msleep(10);	// or using msleep(200);
 
     memcpy(&ret, resBuf->buffer, sizeof(ret));
@@ -371,8 +592,9 @@ static int rpmb_rw(
 
 	ret = rpmb_check_req_resp(req, frames_out);
 	dbg_dump_frame("Out Frame: ", frames_out);
-    resBuf->size = 0;
+    resBuf->size = 0; */
     LogDebug("    - rpmb_rw time: %llu", clock() - start);  // youngsup
+//    rpmb_seq(req, frames_in, cnt_in, frames_out, cnt_out);
 
 	return ret;
 }
@@ -480,6 +702,7 @@ static int rpmb_read_blocks(
 	frame_in->block_count = htobe16(blocks_cnt);
 	RAND_bytes(frame_in->nonce, RPMB_NONCE_SIZE);
 
+	printk("Enter rpmb_rw\n");
 	ret = rpmb_rw(command, req, frame_in, 1, frames_out, blocks_cnt);
 	if (ret)
 		goto out;
@@ -702,6 +925,7 @@ int op_rpmb_write_blocks(uint16_t addr, uint16_t blocks_cnt, void *dataBuffer)
 int op_rpmb_read_atomic(uint16_t addr, void *dataBuffer)
 {
 	int ret = rpmb_read_blocks(COMMAND_RPMB, RPMB_READ_DATA, addr, 1, dataBuffer, false);
+    printk("op_rpmb_read_atomic\n");
     if (ret) {
         rpmb_err("RPMB read atomic block %d fail\n", addr);
         return ret;

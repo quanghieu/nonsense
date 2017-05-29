@@ -116,7 +116,7 @@ struct rpmb_ioc_cmd {
 	struct rpmb_ioc_cmd *icmd = &(_cmd);                 \
 	icmd->flags = (_flags);                              \
 	icmd->nframes = (_n);                                \
-	icmd->frames_ptr = (__aligned_u64)(intptr_t)(_ptr);  \
+	icmd->frames_ptr = (__aligned_u64)(long)(_ptr);  \
 } while (0)
 
 /**

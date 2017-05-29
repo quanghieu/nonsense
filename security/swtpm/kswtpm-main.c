@@ -268,6 +268,13 @@ tpm_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
     ret = copy_from_user(InputBuffer, buf, count);
     // Do implementation-specific command dispatch
     _plat__NvAtomicPrepare();
+    go.clock = 0x12345;
+    NvWrite(NV_ORDERLY_DATA,sizeof(go), &go);
+//    NvCommit();
+    if(NvCommit())
+	printk("RPMB commit done\n");
+    else
+	printk("RPMB fail\n");
     if (!TPM_Init)
         init_tpm();
     _plat__RunCommand(InBuffer.BufferSize, InBuffer.Buffer,

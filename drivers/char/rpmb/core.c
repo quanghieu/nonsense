@@ -161,20 +161,25 @@ static void rpmb_cmd_fixup(struct rpmb_dev *rdev,
 int rpmb_cmd_seq(struct rpmb_dev *rdev, struct rpmb_cmd *cmds, u32 ncmds)
 {
 	int err;
-
+	int i = 0;
+	printk("Enter rpmb_cmd_seq");
 	if (!rdev || !cmds || !ncmds)
 		return -EINVAL;
-
+        printk("Command: ");
+	for(i = 0; i<sizeof(struct rpmb_cmd);i++){
+		printk("%x",cmds[i]);
+	}
 	mutex_lock(&rdev->lock);
 	err = -EOPNOTSUPP;
 	if (rdev->ops && rdev->ops->cmd_seq) {
 		rpmb_cmd_fixup(rdev, cmds, ncmds);
 		err = rdev->ops->cmd_seq(rdev->dev.parent, cmds, ncmds);
+		printk("RPMB Op: %px",rdev->ops->cmd_seq);
 	}
 	mutex_unlock(&rdev->lock);
 	return err;
 }
-EXPORT_SYMBOL_GPL(rpmb_cmd_seq);
+EXPORT_SYMBOL(rpmb_cmd_seq);
 
 static void rpmb_cmd_set(struct rpmb_cmd *cmd, u32 flags,
 			 struct rpmb_frame *frames, u32 nframes)
