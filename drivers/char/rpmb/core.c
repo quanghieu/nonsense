@@ -165,10 +165,6 @@ int rpmb_cmd_seq(struct rpmb_dev *rdev, struct rpmb_cmd *cmds, u32 ncmds)
 	printk("Enter rpmb_cmd_seq");
 	if (!rdev || !cmds || !ncmds)
 		return -EINVAL;
-        printk("Command: ");
-	for(i = 0; i<sizeof(struct rpmb_cmd);i++){
-		printk("%x",cmds[i]);
-	}
 	mutex_lock(&rdev->lock);
 	err = -EOPNOTSUPP;
 	if (rdev->ops && rdev->ops->cmd_seq) {

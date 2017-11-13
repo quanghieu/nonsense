@@ -101,7 +101,7 @@ ExecuteCommand(
     // This function call is not necessary in a hardware TPM. However, taking
     // a snapshot of the hardware timer at the beginning of the command allows
     // the time value to be consistent for the duration of the command execution.
-    TimeUpdateToCurrent();
+//    TimeUpdateToCurrent();
 
     // Any command through this function will unceremoniously end the
     // _TPM_Hash_Data/_TPM_Hash_End sequence.

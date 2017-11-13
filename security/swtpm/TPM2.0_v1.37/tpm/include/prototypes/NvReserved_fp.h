@@ -71,6 +71,11 @@ NvWrite(
     void            *inBuffer       // IN: location containing data to write
     );
 
+void NvClock(
+	uint64_t 	*new_clock,
+	uint64_t 	*old_clock,
+	uint64_t 	start_clock
+	);
 //*** NvUpdatePersistent()
 // This function is used to update a value in the PERSISTENT_DATA structure and
 // commits the value to NV.

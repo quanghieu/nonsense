@@ -4,6 +4,7 @@
 #include <linux/data_protection.h>
 #include <asm/proc-fns.h>
 #include <asm/irqflags.h>
+#include <linux/get_pmd.h>
 
 #define TEXT_ALIGN __attribute__ ((aligned(4096)))
 #define KDP_CODE __attribute__ ((section ("kdp_text")))
@@ -105,7 +106,25 @@ int OPTIMIZE __init kdp_init(void)
 }
 early_initcall(kdp_init);
 
+pmd_t* lookup_pmd(unsigned long address, struct task_struct *tsk){
+	pud_t *pud;
+	pgd_t *pgd;
+	pmd_t *pmd;
 
+	pr_info("Address of ptr is: %lu\n", address);
+	pr_info("PID is %x\n",tsk->mm);
+	pgd = (pgd_t *) pgd_offset(tsk->mm, address);
+	pud = pud_offset(pgd, address);
+	pmd = pmd_offset(pud, address);
+	
+//	pmd_val(*pmd) &= ~PMD_DOMAIN_MASK;
+//	pmd_val(*pmd) |= PMD_DOMAIN(cpu+3);
+	
+	pr_info("PDE is %x and %x\n",*pgd, pgd_val(*pgd));
+	pr_info("PMD is %x and %x\n",*pmd, pmd_val(*pmd));
+	return pmd;
+}
+EXPORT_SYMBOL(lookup_pmd);
 static pte_t* OPTIMIZE lookup_address(unsigned long address, unsigned int *level)
 {
     pgd_t *pgd = NULL;
@@ -384,6 +403,18 @@ void OPTIMIZE kdp_enable(void)
     /* restore old pgd */
     shadow_exit_gate(flags);
     pr_info("[kdp] kdp enabled\n");
+
+//    pr_info("[kdp] reg_base = %px\n",mct_base);
+//    printk("[kdp] Address of bss section : %p Protect exynos mct at address: %x\n",&__bss_start,mct_addr);
+    /* Protect exynos timer io memory */
+    /* Protect mct section */
+//    kdp_protect_one_page((void*)(((long)(&mct_base)) & ~(PAGE_SIZE-1)));   
+//    kdp_protect_one_page((void*)mct_base);
+    kdp_protect_one_page_none((void*)0xc08eb000);
+    kdp_protect_one_page((void*)0xc0b66000);
+//    kdp_protect_one_page_none((void*)0xc08ec000); 
+//    rpmb_write_blocks(0,0,0,&attr);
+//    rpmb_write_blocks(0,0,0,&attr);
     flush_tlb_all();
 }
 

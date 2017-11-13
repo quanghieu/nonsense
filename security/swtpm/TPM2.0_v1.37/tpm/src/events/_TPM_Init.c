@@ -55,7 +55,7 @@ _TPM_Init(
         NvRead(&go, NV_ORDERLY_DATA, sizeof(go));
 
         // Start clock. Need to do this after NV has been restored.
-        TimePowerOn();
+//        TimePowerOn();
     }
     return;
 }

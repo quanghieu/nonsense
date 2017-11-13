@@ -355,7 +355,7 @@ static int rpmb_cmd_copy(struct rpmb_cmd *cmd,
 	/* some archs have issues with 64bit get_user */
 //	memcpy(&frames_ptr, ucmd->frames_ptr, sizeof(frames_ptr));
 //	pr_info("Copy 1\n");
-	dbg_dump_frame("User frame: ",&(ucmd->frames_ptr));
+//	dbg_dump_frame("User frame: ",&(ucmd->frames_ptr));
 	sz = cmd->nframes * sizeof(struct rpmb_frame);
 	frames = kmalloc(sz, GFP_KERNEL);
 	memcpy(frames, &ucmd->frames_ptr, sz);
@@ -376,14 +376,12 @@ static long rpmb_seq_cmd(struct rpmb_dev *rdev,
 	int ret;
 
 	ncmds = ptr->h.num_of_cmds;
-   	pr_info("Entered rpmb_seq_cmd\n");
 	if (ncmds > 3) {
 		dev_err(&rdev->dev, "supporting up to 3 packets (%llu)\n",
 			ncmds);
 		return -EINVAL;
 	}
 
-	pr_info("Kcalloc\n");
 	cmds = kcalloc(ncmds, sizeof(*cmds), GFP_KERNEL);
 	if (!cmds)
 		return -ENOMEM;
@@ -395,12 +393,9 @@ static long rpmb_seq_cmd(struct rpmb_dev *rdev,
 //		if (ret)
 //			goto out;
 	}
-	pr_info("Cmds:");
-	for(i = 0; i < sizeof(struct rpmb_cmd); i++){
-		printk("%x ",cmds[i]);
-	}
+	
 	ret = rpmb_cmd_seq(rdev,cmds, ncmds);
-	pr_info("Done rpmb_cmd_seq\n");
+
 	if (ret)
 		goto out;
 
@@ -453,10 +448,10 @@ int rpmb_cmd_seq_mod(struct rpmb_dev *rdev, struct rpmb_cmd *cmds, u32 ncmds)
 {
 	int err;
 	int i = 0;
-	printk("Enter rpmb_cmd_seq");
+	
 	if (!rdev || !cmds || !ncmds)
 		return -EINVAL;
-        printk("Command: ");
+      
 	for(i = 0; i<sizeof(struct rpmb_cmd);i++){
 		printk("%x",cmds[i]);
 	}
@@ -465,7 +460,6 @@ int rpmb_cmd_seq_mod(struct rpmb_dev *rdev, struct rpmb_cmd *cmds, u32 ncmds)
 	if (rdev->ops && rdev->ops->cmd_seq) {
 		rpmb_cmd_fixup(rdev, cmds, ncmds);
 		err = rdev->ops->cmd_seq(rdev->dev.parent, cmds, ncmds);
-		printk("RPMB Op: %px",rdev->ops->cmd_seq);
 	}
 	mutex_unlock(&rdev->lock);
 	return err;
@@ -488,12 +482,11 @@ static int rpmb_seq(uint16_t req,
     struct rpmb_cmd *cmds;
     struct rpmb_frame *frames;
 
-    printk("Entered rpmb_seq\n");
+//    printk("Entered rpmb_seq\n");
     rdev = rpmb_dev_get_by_type(RPMB_TYPE_EMMC);
-    printk("After get r_dev %px",rdev);
-    rpmb_dbg("RPMB OP SEQ: %s\n", rpmb_op_str(req));
-    pr_info("Counter in is: %d\n",cnt_in);
-    dbg_dump_frame("RPMB_SEQ In Frame: ", frames_in);
+
+//    rpmb_dbg("RPMB OP SEQ: %s\n", rpmb_op_str(req));
+//    dbg_dump_frame("RPMB_SEQ In Frame: ", frames_in);
 
     i = 0; 
     flags = RPMB_F_WRITE;
@@ -513,16 +506,14 @@ static int rpmb_seq(uint16_t req,
 
     rpmb_ioc_cmd_set(iseq.cmd[i], 0, frames_out, cnt_out);
     i++;
-    pr_info("Nearly done %d\n",i);
 
 //    rpmb_seq_cmd(rdev,&iseq); 
     cmds = kcalloc(i, sizeof(*cmds), GFP_KERNEL);
 
-    pr_info("Pass kcalloc\n");
 	cmds[0].flags = flags;
 	cmds[0].nframes = 1;
         cmds[0].frames = frames_in;
-    pr_info("Pass phase 1\n");
+    
     if(i == 2){
    	cmds[1].flags = 0;
         cmds[1].nframes = 1;
@@ -538,13 +529,12 @@ static int rpmb_seq(uint16_t req,
         cmds[2].frames = frames_out;
 
     }
-    pr_info("Prepare to enter seq_mod\n");   
     rpmb_cmd_seq(rdev,cmds, i);
 
     ret = rpmb_check_req_resp(req, frames_out);
 
-    dbg_dump_frame("Res Frame: ", frame_res);
-    dbg_dump_frame("Out Frame: ", frames_out);
+//    dbg_dump_frame("Res Frame: ", frame_res);
+//    dbg_dump_frame("Out Frame: ", frames_out);
     free(frame_res);
     return ret;
 }
@@ -577,23 +567,25 @@ static int rpmb_rw(
     // request size (ready to send request)
     reqBuf->size = 6 + sizeof(cnt_in) + sizeof(cnt_out) + sizeof(struct rpmb_frame) * cnt_in;
 
-	rpmb_dbg("RPMB OP: %s\n", rpmb_op_str(req));
-	dbg_dump_frame("In Frame: ", frames_in); 
-    printk("Enter rpmb_seq\n");
+//	rpmb_dbg("RPMB OP: %s\n", rpmb_op_str(req));
+//	dbg_dump_frame("In Frame: ", frames_in); 
+//    printk("Enter rpmb_seq\n");
     if(command == COMMAND_RPMB){
     	rpmb_seq(req, frames_in, cnt_in, frames_out, cnt_out);
     }
-/*    while (resBuf->size == 0)
+	
+   if(command == COMMAND_CLOUD){
+    while (resBuf->size == 0)
         msleep(10);	// or using msleep(200);
 
     memcpy(&ret, resBuf->buffer, sizeof(ret));
     memcpy(&cnt, resBuf->buffer + sizeof(ret), sizeof(cnt));
     memcpy(frames_out, resBuf->buffer + sizeof(ret) + sizeof(cnt), cnt_out * sizeof(struct rpmb_frame));
-
+    } 
 	ret = rpmb_check_req_resp(req, frames_out);
-	dbg_dump_frame("Out Frame: ", frames_out);
-    resBuf->size = 0; */
-    LogDebug("    - rpmb_rw time: %llu", clock() - start);  // youngsup
+//	dbg_dump_frame("Out Frame: ", frames_out);
+    resBuf->size = 0; 
+//    LogDebug("    - rpmb_rw time: %llu", clock() - start);  // youngsup
 //    rpmb_seq(req, frames_in, cnt_in, frames_out, cnt_out);
 
 	return ret;
@@ -702,7 +694,6 @@ static int rpmb_read_blocks(
 	frame_in->block_count = htobe16(blocks_cnt);
 	RAND_bytes(frame_in->nonce, RPMB_NONCE_SIZE);
 
-	printk("Enter rpmb_rw\n");
 	ret = rpmb_rw(command, req, frame_in, 1, frames_out, blocks_cnt);
 	if (ret)
 		goto out;
@@ -925,7 +916,6 @@ int op_rpmb_write_blocks(uint16_t addr, uint16_t blocks_cnt, void *dataBuffer)
 int op_rpmb_read_atomic(uint16_t addr, void *dataBuffer)
 {
 	int ret = rpmb_read_blocks(COMMAND_RPMB, RPMB_READ_DATA, addr, 1, dataBuffer, false);
-    printk("op_rpmb_read_atomic\n");
     if (ret) {
         rpmb_err("RPMB read atomic block %d fail\n", addr);
         return ret;

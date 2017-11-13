@@ -84,7 +84,7 @@ TimeStartup(
 
     // Before Startup, the TPM will not do clock updates. At startup, need to
     // do a time update.
-    TimeUpdate();
+//    TimeUpdate();
     return;
 }
 

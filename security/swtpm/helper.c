@@ -200,7 +200,6 @@ void _rpmb__NvAtomicCommit(
         )
 {
     int ret, i;
-    pr_info("Entered update atomic\n");
     // Write updated NV block
     for (i = 0; i < (NV_MEMORY_SIZE / RPMB_BLOCK_SIZE); i++) {
         if (!updateNV[i])
@@ -211,7 +210,6 @@ void _rpmb__NvAtomicCommit(
             LogError("RPMB write fail");
             return;
         }
-	pr_info("Update 1 done\n");
         s_NvAtomic[i].atomic = !s_NvAtomic[i].atomic;
         s_NvAtomic[i].encrypt = true;
         s_NvAtomic[i].localVersion++;
@@ -243,7 +241,6 @@ void _rpmb__NvAtomicCommit(
             LogError("RPMB write fail");
             return;
         }
-	pr_info("Update 2 done\n");
         updateAtomicNV[i] = 0;
     }
 }

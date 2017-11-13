@@ -95,7 +95,7 @@ _plat__TimerRead(
 #ifdef HELPER
     if (s_moduleInit) {
         if (go.cloudClock == 0) {
-            go.cloudClock = _cloud__TimerRead();
+//            go.cloudClock = _cloud__TimerRead();
             LogDebug("Update cloud clock! cloud(%llu), local(%llu)", go.cloudClock, clock());
         }
     }

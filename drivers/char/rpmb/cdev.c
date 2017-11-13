@@ -170,7 +170,6 @@ static long rpmb_ioctl_seq_cmd(struct rpmb_dev *rdev,
 	/* some archs have issues with 64bit get_user */
 	if (copy_from_user(&ncmds, &ptr->num_of_cmds, sizeof(ncmds)))
 		return -EFAULT;
-	printk("Number of command is %u\n",ncmds);
 	if (ncmds > 3) {
 		dev_err(&rdev->dev, "supporting up to 3 packets (%llu)\n",
 			ncmds);
@@ -186,10 +185,6 @@ static long rpmb_ioctl_seq_cmd(struct rpmb_dev *rdev,
 		ret = rpmb_cmd_copy_from_user(&cmds[i], &ucmds[i]);
 		if (ret)
 			goto out;
-		pr_info("Current is %u",i);
-                pr_info("Flags = %u\n",cmds[i].flags);
-		pr_info("Nframes = %u\n",cmds[i].nframes);
-		dbg_dump_frame("Prepare to execute: ",cmds[i].frames);
 	}
 	
 	ret = rpmb_cmd_seq(rdev, cmds, ncmds);

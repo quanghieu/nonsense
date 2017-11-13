@@ -1,19 +1,9 @@
-/*(Copyright)
- *      Microsoft Copyright 2009 - 2016
- *      All rights reserved.
- */
-
-//** Description
-
-// This file contains the kernel module to a TPM simulator.
-// based on tpm2/Simulator/srcc/TcpServer.c
-
-//** Includes, Locals, Defines and Function Prototypes
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/init.h>
 #include <linux/miscdevice.h>
+#include <asm/uaccess.h>        
 #include <asm/uaccess.h>        /* for put_user */
 #include <linux/slab.h>
 #include <helper.h>
@@ -26,6 +16,7 @@
 
 #ifdef CONFIG_SWTPM_PROTECTION
 #include <linux/data_protection.h>
+#include <linux/nv.h>
 #else
 #undef entry_gate
 #undef exit_gate
@@ -61,6 +52,14 @@ struct {
     unsigned char *Buffer;
 } InBuffer, OutBuffer;
 
+extern void __attribute__((section(".mct"))) (*NvOps) (uint64_t);
+uint64_t new_clockVal = 0;
+uint64_t old_clockVal = 0;
+uint64_t start_clock = 0;
+//extern unsigned long __attribute__((section(".mct"))) addr_tpmTime;
+
+unsigned int ORDER_DATA = NV_ORDERLY_DATA;
+EXPORT_SYMBOL(ORDER_DATA);
 #endif // __IGNORE_STATE___
 
 /* Kernel Module info */
@@ -118,6 +117,11 @@ static struct miscdevice tpm_dev = {
 
 
 //** Functions
+static void clockUpdate(uint64_t unused){
+//	pr_info("Start clock update\n");
+	NvClock(&new_clockVal, &old_clockVal, start_clock);
+//	pr_info("End clock update\n");
+}
 
 static int
 init_tpm(void)
@@ -152,11 +156,24 @@ init_tpm(void)
     in.startupType = TPM_SU_CLEAR;
     TPM2_Startup(&in);
 
+    NvRead(&go, NV_ORDERLY_DATA, sizeof(go));
+//    printk("Count is %llx\n",go.clock);
+    start_clock = go.clock;
+//    NvOps = &clockUpdate;
+//    NvOps(go.clock);
+
     TPM_Init = 1;
     LogInfo("TPM2 initialize finish!! go.cloudClock(%llu)", go.cloudClock);
+//    NvOps = &NvClock;
+//    printk("[ kdp ] Before write to RPMB\n");
+//    NvOps(0x123456);
+//    printk("[ kdp ] After write to RPMB\n");
+
 
     return 0;
 }
+
+
 
 //*** init_tpm_module()
 // This function is called when the module is loaded
@@ -164,7 +181,8 @@ static int __init
 init_tpm_module(void)
 {
     int res;
-
+    unsigned long shadow_flags = 0;
+    unsigned long val = 0x0;
     LogInfo("TPM2 module initialize");
     s_moduleInit = false;
     init_helper();
@@ -182,6 +200,11 @@ init_tpm_module(void)
         LogError("Unable to register \"TPM\" misc device\n");
         return res;
     }
+    NvRead(&go, NV_ORDERLY_DATA, sizeof(go));
+    printk("Count is %llx\n",go.clock);
+//    start_clock = go.clock;
+//    NvOps = &clockUpdate;
+//    NvOps(go.clock);
 
 	/* initialize variables */
     TPM_Open = 0;
@@ -192,6 +215,14 @@ init_tpm_module(void)
 #ifdef HELPER
     s_moduleInit = true;
 #endif
+/*    pr_info("tpmTime address = %px",&s_tpmTime);
+#ifdef CONFIG_SWTPM_PROTECTION
+    shadow_flags = shadow_entry_gate();
+//    addr_tpmTime = (unsigned long)&go.clock; 
+    pr_info("Enable TPM\n");
+//    _plat__NvAtomicPrepare();
+    exit_gate();
+#endif */
 	return SUCCESS;
 }
 
@@ -265,18 +296,17 @@ tpm_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
     OutBuffer.BufferSize = MAX_BUFFER;
     OutBuffer.Buffer = (unsigned char *)&OutputBuffer;
 
+    
     ret = copy_from_user(InputBuffer, buf, count);
     // Do implementation-specific command dispatch
     _plat__NvAtomicPrepare();
-    go.clock = 0x12345;
-    NvWrite(NV_ORDERLY_DATA,sizeof(go), &go);
-//    NvCommit();
-    if(NvCommit())
-	printk("RPMB commit done\n");
-    else
-	printk("RPMB fail\n");
-    if (!TPM_Init)
+//    NvOps = &clockUpdate;
+//    NvOps(0x12345);
+    if (!TPM_Init){
         init_tpm();
+        printk("Init TPM\n");
+    }
+       
     _plat__RunCommand(InBuffer.BufferSize, InBuffer.Buffer,
             &OutBuffer.BufferSize, &OutBuffer.Buffer);
     if(OutBuffer.BufferSize < 0) {

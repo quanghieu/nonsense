@@ -86,17 +86,17 @@ TPM_Manufacture(
     NV_SYNC_PERSISTENT(totalResetCount);
 
     // initialize the clock stuff
-    go.clock = 0;
-    go.clockSafe = YES;
+//    go.clock = 0;
+//    go.clockSafe = YES;
 
-    NvWrite(NV_ORDERLY_DATA, sizeof(ORDERLY_DATA), &go);
+//    NvWrite(NV_ORDERLY_DATA, sizeof(ORDERLY_DATA), &go);
 
     // Commit NV writes.  Manufacture process is an artificial process existing
     // only in simulator environment and it is not defined in the specification
     // that what should be the expected behavior if the NV write fails at this
     // point.  Therefore, it is assumed the NV write here is always success and
     // no return code of this function is checked.
-    NvCommit();
+//    NvCommit();
 
     g_manufactured = TRUE;
 

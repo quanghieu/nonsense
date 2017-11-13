@@ -50,7 +50,7 @@
 //** Includes, Defines and Data Definitions
 #define NV_C
 #include    "Tpm.h"
-
+extern uint64_t __attribute__((section(".mct"))) addr_tpmTime;
 //*** NvInitStatic()
 // This function initializes the static variables used in the NV subsystem.
 static void
@@ -188,6 +188,43 @@ NvWrite(
     // Set the flag that a NV write happened
     SET_NV_UPDATE(UT_NV);
     return;
+}
+
+void
+NvClock(uint64_t *new_clock, uint64_t *old_clock, uint64_t start_clock)
+{
+	uint64_t clock_msec;
+	uint64_t delta;
+
+	if(*new_clock == 0){
+		if(start_clock != 0){
+			*new_clock = start_clock;
+			printk("Init clock is %llu\n",start_clock);
+			return;
+		}
+	}
+
+	pr_info("Timer is %llu\n",addr_tpmTime);
+
+	if(*new_clock == *old_clock && *new_clock != 0){
+		printk("May be hack\n");
+	}
+
+
+	do_div(addr_tpmTime,24000);
+	go.clock = start_clock + addr_tpmTime;
+	if(go.clock < *old_clock){
+		pr_info("old clock, new clock, start_clock %llu %llu %llu\n",*old_clock, *new_clock, start_clock);
+	}
+	*old_clock = *new_clock;
+	NvWrite(NV_ORDERLY_DATA, sizeof(ORDERLY_DATA), &go);
+	if(NvCommit()){
+		printk("Writting done\n");
+		*new_clock = start_clock + addr_tpmTime;
+		printk("Current clock is %llu\n",*new_clock);
+	}
+	else
+		printk("Write fail\n");
 }
 
 //*** NvUpdatePersistent()
